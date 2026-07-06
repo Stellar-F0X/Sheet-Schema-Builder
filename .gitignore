@@ -95,3 +95,7 @@ x86/
 
 # Publish Web Output
 *.[Pp]ublish.xml
+
+# Distributed package contents
+!Package/
+!Package/**

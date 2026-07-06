@@ -1,0 +1,17 @@
+{
+  "name": "com.sheet-schema-builder.tool",
+  "version": "1.0.0",
+  "displayName": "Sheet Schema Builder",
+  "description": "Builds Unity or Unreal sheet schema code and JSON data from Google Sheets or local TSV files.",
+  "author": {
+    "name": "Sheet Schema Builder"
+  },
+  "keywords": [
+    "sheet",
+    "schema",
+    "codegen",
+    "google-sheets",
+    "unity",
+    "unreal"
+  ]
+}

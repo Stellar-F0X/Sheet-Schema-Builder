@@ -1,0 +1,12 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0.0",
+  "FriendlyName": "Sheet Schema Builder",
+  "Description": "Builds Unreal or Unity sheet schema code and JSON data from Google Sheets or local TSV files.",
+  "Category": "Tools",
+  "CreatedBy": "Sheet Schema Builder",
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "Installed": false
+}

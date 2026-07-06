@@ -3,12 +3,52 @@
 Google Sheet를 읽어 **C# 구조체 / 시트 데이터베이스 클래스를 코드 제네레이션**하고,
 전체 데이터를 다시 읽을 수 있는 **Json**으로 저장하는 도구입니다.
 
+## 목차
+
+- [설치](#설치)
+- [실행](#실행)
+- [동작 순서](#동작-순서)
+- [시트 형식](#시트-형식)
+- [.ini 설정](#ini-설정)
+- [Unity에서 사용](#unity에서-사용)
+- [Unreal에서 사용](#unreal에서-사용)
+- [프로젝트 구조](#프로젝트-구조)
+
+## 설치
+
+배포 대상은 `Package/` 폴더입니다. 이 폴더에는 공통 실행 DLL, 기본 설정 파일, Unity 패키지 메타데이터, Unreal 플러그인 메타데이터가 함께 들어 있습니다.
+
+### Unity
+
+Unity Package Manager에서 Git URL을 추가할 때 `Package/` 하위 경로를 지정합니다.
+
+```text
+https://github.com/Stellar-F0X/Sheet-Schema-Builder.git?path=/Package
+```
+
+로컬에서 테스트할 때는 Package Manager의 **Add package from disk...**를 선택하고 `Package/package.json`을 지정합니다.
+
+### Unreal
+
+프로젝트의 `Plugins/SheetSchemaBuilder/` 폴더에 `Package/` 안의 파일을 복사합니다.
+
+```text
+YourUnrealProject/
+  Plugins/
+    SheetSchemaBuilder/
+      SheetSchemaBuilder.uplugin
+      Sheet-Schema-Builder.dll
+      Sheet-Schema-Builder.ini
+      Templates/
+```
+
+현재 Unreal 패키지는 에디터 모듈을 포함한 네이티브 플러그인이 아니라, 코드 생성 DLL과 템플릿을 배포하기 위한 tool package입니다.
+
 ## 실행
 
 ```bash
-dotnet run -- DataBuilder.ini          # 기본 실행
-dotnet run -- DataBuilder.ini --force  # 해시가 같아도 전부 재생성
-dotnet run -- Sample/sample.ini        # 오프라인 샘플 (.tsv) 실행
+dotnet Package/Sheet-Schema-Builder.dll Package/Sheet-Schema-Builder.ini
+dotnet Package/Sheet-Schema-Builder.dll Package/Sheet-Schema-Builder.ini --force
 ```
 
 ## 동작 순서
@@ -50,7 +90,7 @@ id    name          price  type           dropMonster  stackable
 
 ## .ini 설정
 
-`DataBuilder.ini` 참고. 상대 경로는 `.ini` 파일 위치 기준입니다.
+`Package/Sheet-Schema-Builder.ini` 참고. 상대 경로는 `.ini` 파일 위치 기준입니다.
 
 ```ini
 [GoogleSheet]
