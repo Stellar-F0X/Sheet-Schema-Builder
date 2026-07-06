@@ -33,7 +33,7 @@ namespace DataBuilder.Model
                 {
                     ColumnSpec column = table.Columns[col];
                     
-                    if (column.Kind != EColumnKind.Enum)
+                    if (column.Type != EColumnType.Enum)
                     {
                         continue;
                     }

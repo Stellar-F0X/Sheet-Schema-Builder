@@ -1,4 +1,5 @@
 using System.Text;
+using System.Reflection;
 using SheetSchemaBuilder;
 
 namespace DataBuilder.CodeGen
@@ -50,8 +51,7 @@ namespace DataBuilder.CodeGen
         /// <summary>하나의 템플릿 파일에서 모든 템플릿 섹션을 읽는다.</summary>
         private static Dictionary<string, string> LoadTemplates(string templateFileName)
         {
-            string templatePath = FindTemplatePath(templateFileName);
-            string[] lines = File.ReadAllLines(templatePath, Encoding.UTF8);
+            string[] lines = LoadTemplateLines(templateFileName);
             Dictionary<string, string> templates = new Dictionary<string, string>(StringComparer.Ordinal);
             string? currentName = null;
             List<string> currentLines = new List<string>();
@@ -97,9 +97,40 @@ namespace DataBuilder.CodeGen
             return templates;
         }
 
-        /// <summary>실행 출력 폴더와 소스 폴더에서 템플릿 파일을 찾는다.</summary>
-        private static string FindTemplatePath(string templateName)
+        private static string[] LoadTemplateLines(string templateFileName)
         {
+            string? templatePath = FindTemplatePath(templateFileName);
+
+            if (templatePath != null)
+            {
+                return File.ReadAllLines(templatePath, Encoding.UTF8);
+            }
+
+            string resourceName = "Templates." + templateFileName;
+            using Stream? stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
+
+            if (stream == null)
+            {
+                throw new SheetSchemaBuilderException($"CodeGen 템플릿 파일을 찾을 수 없습니다: {templateFileName}");
+            }
+
+            using StreamReader reader = new StreamReader(stream, Encoding.UTF8);
+            return reader.ReadToEnd().ReplaceLineEndings("\n").Split('\n');
+        }
+
+        /// <summary>실행 출력 폴더와 소스 폴더에서 템플릿 파일을 찾는다.</summary>
+        private static string? FindTemplatePath(string templateName)
+        {
+            string? assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            if (string.IsNullOrWhiteSpace(assemblyDirectory) == false)
+            {
+                string? assemblyPath = FindTemplatePathUnder(assemblyDirectory, templateName);
+                if (assemblyPath != null)
+                {
+                    return assemblyPath;
+                }
+            }
+
             string? appBasePath = FindTemplatePathUnder(AppContext.BaseDirectory, templateName);
             if (appBasePath != null)
             {
@@ -112,7 +143,7 @@ namespace DataBuilder.CodeGen
                 return currentDirectoryPath;
             }
 
-            throw new SheetSchemaBuilderException($"CodeGen 템플릿 파일을 찾을 수 없습니다: {templateName}");
+            return null;
         }
 
         /// <summary>시작 디렉터리부터 상위 디렉터리까지 올라가며 템플릿 파일을 찾는다.</summary>

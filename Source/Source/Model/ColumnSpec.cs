@@ -5,19 +5,19 @@ namespace DataBuilder.Model
 	/// <summary>시트의 한 열(컬럼) 정의. 1행의 타입 문자열과 2행의 필드명으로 구성된다.</summary>
 	public sealed class ColumnSpec
 	{
-		private readonly static Dictionary<string, EColumnKind> _PrimitiveTypeMap = new()
+		private readonly static Dictionary<string, EColumnType> _PrimitiveTypeMap = new()
 		{
-			["int"] = EColumnKind.Int,
-			["int32"] = EColumnKind.Int,
-			["long"] = EColumnKind.Long,
-			["int64"] = EColumnKind.Long,
-			["float"] = EColumnKind.Float,
-			["single"] = EColumnKind.Float,
-			["double"] = EColumnKind.Double,
-			["bool"] = EColumnKind.Bool,
-			["boolean"] = EColumnKind.Bool,
-			["string"] = EColumnKind.String,
-			["text"] = EColumnKind.String,
+			["int"] = EColumnType.Int,
+			["int32"] = EColumnType.Int,
+			["long"] = EColumnType.Long,
+			["int64"] = EColumnType.Long,
+			["float"] = EColumnType.Float,
+			["single"] = EColumnType.Float,
+			["double"] = EColumnType.Double,
+			["bool"] = EColumnType.Bool,
+			["boolean"] = EColumnType.Bool,
+			["string"] = EColumnType.String,
+			["text"] = EColumnType.String,
 		};
 
 		public required string FieldName
@@ -26,24 +26,24 @@ namespace DataBuilder.Model
 			init;
 		}
 
-		public required EColumnKind Kind
+		public required EColumnType Type
 		{
 			get;
-			init;
+			set;
 		}
 
-		/// <summary>Kind == Enum일 때 enum 타입 이름.</summary>
+		/// <summary>Type == Enum일 때 enum 타입 이름.</summary>
 		public string EnumName
 		{
 			get;
 			init;
 		} = string.Empty;
 
-		/// <summary>Kind == Ref일 때 참조 대상 시트 이름.</summary>
+		/// <summary>Type == Ref일 때 참조 대상 시트 이름.</summary>
 		public string RefSheetName
 		{
 			get;
-			init;
+			set;
 		} = string.Empty;
 
 		/// <summary>원본 타입 문자열 (예: "enum:ItemType").</summary>
@@ -65,22 +65,22 @@ namespace DataBuilder.Model
 				throw new SheetSchemaBuilderException($"시트 '{sheetName}' {columnIndex + 1}번째 열의 필드명(2행)이 비어 있습니다.");
 			}
 
-			EColumnKind? primitive = ParsePrimitiveOrNull(lower);
+			EColumnType? primitive = ParsePrimitiveOrNull(lower);
 
 			if (primitive.HasValue)
 			{
-				return new ColumnSpec { FieldName = field, Kind = primitive.Value, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = primitive.Value, RawType = raw };
 			}
 
 			if (TryParseNamedType(raw, "enum", out string enumName))
 			{
 				string name = Identifier.EnsurePrefix(Identifier.Sanitize(enumName), "E");
-				return new ColumnSpec { FieldName = field, Kind = EColumnKind.Enum, EnumName = name, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = EColumnType.Enum, EnumName = name, RawType = raw };
 			}
 
 			if (TryParseNamedType(raw, "ref", out string refSheet))
 			{
-				return new ColumnSpec { FieldName = field, Kind = EColumnKind.Ref, RefSheetName = refSheet, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = EColumnType.Ref, RefSheetName = refSheet, RawType = raw };
 			}
 			else
 			{
@@ -90,9 +90,9 @@ namespace DataBuilder.Model
 		
 
 		/// <summary>기본 타입 문자열을 컬럼 타입으로 변환한다.</summary>
-		private static EColumnKind? ParsePrimitiveOrNull(string lower)
+		private static EColumnType? ParsePrimitiveOrNull(string lower)
 		{
-			if (_PrimitiveTypeMap.TryGetValue(lower, out EColumnKind kind))
+			if (_PrimitiveTypeMap.TryGetValue(lower, out EColumnType kind))
 			{
 				return kind;
 			}

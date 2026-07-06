@@ -16,13 +16,14 @@ namespace DataBuilder.Export
 		/// <summary>Json 내보내기에 필요한 시트 모델과 enum 정보를 보관한다.</summary>
 		public JsonExporter(IReadOnlyList<SheetTable> tables, EnumRegistry enums)
 		{
-			_tables = tables;
 			_tablesByName = tables.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+			_tables = tables;
 			_enums = enums;
 		}
 
+		
 		/// <summary>시트별 Key 컬럼 값 집합. ref 무결성 검증에 사용한다.</summary>
-		private readonly Dictionary<string, HashSet<string>> _keySets = new(StringComparer.OrdinalIgnoreCase);
+		private readonly Dictionary<string, HashSet<string>> _keySets = new(StringComparer.OrdinalIgnoreCase); 
 
 		private readonly Dictionary<string, SheetTable> _tablesByName;
 
@@ -76,14 +77,17 @@ namespace DataBuilder.Export
 
 				for (int r = 0; r < table.Rows.Count; r++)
 				{
-					string key = table.Rows[r][0]; 
+					string key = table.Rows[r][0];
 
-					if (string.IsNullOrWhiteSpace(key) == false || keys.Add(key)) 
+					if (string.IsNullOrWhiteSpace(key))
 					{
-						continue;
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: 키가 설정되어있지 않습니다.");
 					}
 
-					throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: 키가 설정되어있지 않습니다. "); 
+					if (keys.Add(key) == false)
+					{
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: 키 '{key}'가 중복되었습니다.");
+					}
 				}
 			}
 		}
@@ -96,9 +100,9 @@ namespace DataBuilder.Export
 			string cell = table.Rows[rowIndex][columnIndex];
 			writer.WritePropertyName(column.FieldName);
 
-			switch (column.Kind)
+			switch (column.Type)
 			{
-				case EColumnKind.Int:
+				case EColumnType.Int:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && int.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
 					{
@@ -112,7 +116,7 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.Long:
+				case EColumnType.Long:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && long.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value))
 					{
@@ -126,7 +130,7 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.Float:
+				case EColumnType.Float:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && float.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
 					{
@@ -140,7 +144,7 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.Double:
+				case EColumnType.Double:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && double.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
 					{
@@ -154,25 +158,25 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.Bool:
+				case EColumnType.Bool:
 				{
 					writer.WriteBooleanValue(ParseBool(cell));
 					break;
 				}
 
-				case EColumnKind.String:
+				case EColumnType.String:
 				{
 					writer.WriteStringValue(cell);
 					break;
 				}
 
-				case EColumnKind.Enum:
+				case EColumnType.Enum:
 				{
 					writer.WriteNumberValue(_enums.GetValue(column.EnumName, cell));
 					break;
 				}
 
-				case EColumnKind.Ref:
+				case EColumnType.Ref:
 				{
 					if (WriteRefCell(writer, column, cell))
 					{
@@ -180,13 +184,13 @@ namespace DataBuilder.Export
 					}
 					else
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {nameof(EColumnKind.Ref)}(으)로 해석할 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {nameof(EColumnType.Ref)}(으)로 해석할 수 없습니다.");
 					}
 				}
 
 				default:
 				{
-					throw new SheetSchemaBuilderException($"지원하지 않는 컬럼 타입입니다: {column.Kind}");
+					throw new SheetSchemaBuilderException($"지원하지 않는 컬럼 타입입니다: {column.Type}");
 				}
 			}
 		}
@@ -202,9 +206,9 @@ namespace DataBuilder.Export
 				return false; 
 			}
 
-			switch (target.KeyColumn.Kind)
+			switch (target.KeyColumn.Type)
 			{
-				case EColumnKind.Int: 
+				case EColumnType.Int:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && int.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intKey))
 					{
@@ -215,7 +219,7 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.Long: 
+				case EColumnType.Long:
 				{
 					if (string.IsNullOrWhiteSpace(cell) == false && long.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out long longKey))
 					{
@@ -226,15 +230,43 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnKind.String: 
+				case EColumnType.Float:
+				{
+					if (string.IsNullOrWhiteSpace(cell) == false && float.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatKey))
+					{
+						writer.WriteNumberValue(floatKey);
+						return true;
+					}
+
+					break;
+				}
+
+				case EColumnType.Double:
+				{
+					if (string.IsNullOrWhiteSpace(cell) == false && double.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleKey))
+					{
+						writer.WriteNumberValue(doubleKey);
+						return true;
+					}
+
+					break;
+				}
+
+				case EColumnType.String:
 				{
 					writer.WriteStringValue(cell);
 					return true;
 				}
 
+				case EColumnType.Enum:
+				{
+					writer.WriteNumberValue(_enums.GetValue(target.KeyColumn.EnumName, cell));
+					return true;
+				}
+
 				default:
 				{
-					throw new SheetSchemaBuilderException($"ref 대상 시트 '{target.Name}'의 Key 타입을 지원하지 않습니다: {target.KeyColumn.Kind}");
+					throw new SheetSchemaBuilderException($"ref 대상 시트 '{target.Name}'의 Key 타입을 지원하지 않습니다: {target.KeyColumn.Type}");
 				}
 			}
 

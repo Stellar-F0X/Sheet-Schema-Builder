@@ -1,6 +1,6 @@
 namespace DataBuilder.Model;
 
-public enum EColumnKind
+public enum EColumnType
 {
 	Int,
 	Long,

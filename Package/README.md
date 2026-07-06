@@ -28,9 +28,22 @@ YourUnrealProject/
       Templates/
 ```
 
-## 실행
+## 사용
 
-```bash
-dotnet Sheet-Schema-Builder.dll Sheet-Schema-Builder.ini
-dotnet Sheet-Schema-Builder.dll Sheet-Schema-Builder.ini --force
+`Sheet-Schema-Builder.dll`은 실행 파일이 아니라 클래스 라이브러리입니다. Unity/Unreal Editor 스크립트, 빌드 툴, 별도 호스트 프로그램에서 DLL을 참조한 뒤 `Process`를 호출합니다.
+
+기본 코드 생성 템플릿은 DLL 안에도 포함되어 있습니다. DLL 옆이나 상위 폴더에 `Templates/`가 있으면 그 파일 템플릿을 우선 사용합니다.
+
+```csharp
+int exitCode = await DataBuilder.SheetSchemaBuilder.Process(new[]
+{
+    "Sheet-Schema-Builder.ini",
+    "--force",
+});
 ```
+
+## 참조 규칙
+
+각 시트의 첫 번째 컬럼이 Key입니다. 다른 시트의 컬럼명이 그 Key 컬럼명과 같으면 자동으로 참조 관계가 생성됩니다.
+
+예를 들어 `Mine_Layout` 시트의 첫 컬럼이 `Mine_Layout_ID`라면, `Stage` 시트의 `Mine_Layout_ID` 컬럼은 `Mine_Layout` 행을 가리키는 Key로 처리됩니다. ID 값 자체가 시트 이름일 필요는 없습니다.

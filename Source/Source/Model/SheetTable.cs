@@ -37,7 +37,7 @@ namespace DataBuilder.Model
 		/// <summary>생성될 구조체 이름 (예: Item → SItemRow).</summary>
 		public string StructName
 		{
-			get { return Identifier.EnsurePrefix(Identifier.Sanitize(Name) + "Row", "S"); }
+			get { return "S" + Identifier.Sanitize(Name) + "Row"; }
 		}
 
 		public required IReadOnlyList<ColumnSpec> Columns
@@ -63,7 +63,7 @@ namespace DataBuilder.Model
 		public required string Hash
 		{
 			get;
-			init;
+			set;
 		}
 
 
@@ -111,11 +111,11 @@ namespace DataBuilder.Model
 				throw new SheetSchemaBuilderException($"시트 '{raw.Name}'에 중복된 필드명이 있습니다: '{duplicated.Key}'");
 			}
 
-			EColumnKind keyKind = columns[0].Kind;
-			
-			if ((keyKind is EColumnKind.Int or EColumnKind.Long or EColumnKind.String) == false)
+			EColumnType keyType = columns[0].Type;
+
+			if (IsSupportedKeyKind(keyType) == false)
 			{
-				throw new SheetSchemaBuilderException($"시트 '{raw.Name}'의 첫 번째 컬럼은 Key로 사용되므로 int/long/string 타입이어야 합니다. (현재: {columns[0].RawType})");
+				throw new SheetSchemaBuilderException($"시트 '{raw.Name}'의 첫 번째 컬럼은 Key로 사용되므로 int/long/float/double/string/enum 타입이어야 합니다. (현재: {columns[0].RawType})");
 			}
 
 			List<IReadOnlyList<string>> rows = new List<IReadOnlyList<string>>();
@@ -140,40 +140,127 @@ namespace DataBuilder.Model
 				rows.Add(padded);
 			}
 
-			// 시트 이름 + 타입 + 필드명들을 더한 문자열을 해시화한다.
-			string hashSource = raw.Name + string.Concat(columns.Select(c => c.RawType + ":" + c.FieldName));
-
 			return new SheetTable
 			{
 				Name = raw.Name,
 				Columns = columns,
 				Rows = rows,
-				Hash = HashUtility.Sha256Hex(hashSource),
+				Hash = BuildHash(raw.Name, columns),
 			};
 		}
 
-		/// <summary>ref 컬럼이 실제 존재하는 시트를 가리키는지, 자기 자신을 포함해 검증한다.</summary>
+		/// <summary>명시적 ref 컬럼과 Key 컬럼명 기반의 암시적 ref 컬럼을 해석하고 검증한다.</summary>
 		public static void ResolveReferences(IReadOnlyList<SheetTable> tables)
 		{
 			Dictionary<string, SheetTable> byName = tables.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
+			Dictionary<string, List<SheetTable>> byKeyFieldName = tables
+			                                                      .GroupBy(t => t.KeyColumn.FieldName, StringComparer.OrdinalIgnoreCase)
+			                                                      .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
 			foreach (SheetTable table in tables)
 			{
-				foreach (ColumnSpec column in table.Columns)
+				for (int i = 0; i < table.Columns.Count; i++)
 				{
-					if (column.Kind != EColumnKind.Ref)
+					ColumnSpec column = table.Columns[i];
+
+					if (column.Type == EColumnType.Ref)
+					{
+						ResolveExplicitReference(table, column, byName, byKeyFieldName);
+						continue;
+					}
+
+					if (i == 0)
 					{
 						continue;
 					}
 
-					if (byName.ContainsKey(column.RefSheetName))
+					if (byKeyFieldName.TryGetValue(column.FieldName, out List<SheetTable>? targets) == false)
 					{
 						continue;
 					}
 
-					throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 컬럼 '{column.FieldName}'이 존재하지 않는 시트를 참조합니다: 'ref:{column.RefSheetName}'");
+					List<SheetTable> otherTargets = targets.Where(t => string.Equals(t.Name, table.Name, StringComparison.OrdinalIgnoreCase) == false)
+					                                       .ToList();
+
+					if (otherTargets.Count == 0)
+					{
+						continue;
+					}
+
+					if (otherTargets.Count > 1)
+					{
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 컬럼 '{column.FieldName}'이 여러 시트의 Key와 일치해 참조 대상을 결정할 수 없습니다: {string.Join(", ", otherTargets.Select(t => t.Name))}");
+					}
+
+					SetReference(table, column, otherTargets[0]);
 				}
+
+				table.Hash = BuildHash(table.Name, table.Columns);
 			}
+		}
+
+		private static string BuildHash(string sheetName, IReadOnlyList<ColumnSpec> columns)
+		{
+			string hashSource = sheetName + string.Concat(columns.Select(c => $"{c.RawType}:{c.FieldName}:{c.Type}:{c.RefSheetName}:{c.EnumName}"));
+			return HashUtility.Sha256Hex(hashSource);
+		}
+
+		private static void ResolveExplicitReference(SheetTable table, ColumnSpec column, Dictionary<string, SheetTable> byName, Dictionary<string, List<SheetTable>> byKeyFieldName)
+		{
+			if (byName.TryGetValue(column.RefSheetName, out SheetTable? target))
+			{
+				SetReference(table, column, target);
+				return;
+			}
+
+			if (byKeyFieldName.TryGetValue(Identifier.Sanitize(column.RefSheetName), out List<SheetTable>? targets))
+			{
+				if (targets.Count == 1)
+				{
+					SetReference(table, column, targets[0]);
+					return;
+				}
+
+				throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 컬럼 '{column.FieldName}'이 참조하는 Key '{column.RefSheetName}'가 여러 시트에 있습니다: {string.Join(", ", targets.Select(t => t.Name))}");
+			}
+
+			throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 컬럼 '{column.FieldName}'이 존재하지 않는 시트 또는 Key를 참조합니다: 'ref:{column.RefSheetName}'");
+		}
+
+		private static void SetReference(SheetTable table, ColumnSpec column, SheetTable target)
+		{
+			if (AreReferenceTypesCompatible(column, target.KeyColumn) == false)
+			{
+				throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 컬럼 '{column.FieldName}' 타입({column.RawType})이 참조 대상 시트 '{target.Name}'의 Key 타입({target.KeyColumn.RawType})과 일치하지 않습니다.");
+			}
+
+			column.Type = EColumnType.Ref;
+			column.RefSheetName = target.Name;
+		}
+
+		private static bool AreReferenceTypesCompatible(ColumnSpec column, ColumnSpec targetKey)
+		{
+			if (column.Type == EColumnType.Ref)
+			{
+				return true;
+			}
+
+			if (column.Type != targetKey.Type)
+			{
+				return false;
+			}
+
+			if (column.Type == EColumnType.Enum)
+			{
+				return string.Equals(column.EnumName, targetKey.EnumName, StringComparison.Ordinal);
+			}
+
+			return true;
+		}
+
+		private static bool IsSupportedKeyKind(EColumnType type)
+		{
+			return type is EColumnType.Int or EColumnType.Long or EColumnType.Float or EColumnType.Double or EColumnType.String or EColumnType.Enum;
 		}
 	}
 }

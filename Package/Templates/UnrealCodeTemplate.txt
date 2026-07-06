@@ -46,6 +46,15 @@ UPROPERTY(EditAnywhere, BlueprintReadWrite)
 {{TYPE}} {{FIELD_NAME}} = {{DEFAULT_VALUE}};
 # END_TEMPLATE
 
+# TEMPLATE STRUCT_REF_GETTER_BLOCK
+/// <summary>{{FIELD_NAME}} 키가 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행을 돌려준다.</summary>
+template <typename TDatabase>
+const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
+{
+    return Database.{{DATABASE_GETTER}}({{FIELD_NAME}});
+}
+# END_TEMPLATE
+
 # TEMPLATE DATABASE_FILE
 {{AUTO_GENERATED_HEADER}}
 #pragma once
