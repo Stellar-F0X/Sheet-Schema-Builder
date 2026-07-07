@@ -1,7 +1,8 @@
 # Sheet Schema Builder
 
-Google Sheet를 읽어 **Unity C# 코드 / Unreal C++ 헤더**를 코드 제네레이션하고, 전체 데이터를 다시 읽을 수 있는 **Json**으로 저장하는 도구입니다.
+Google Sheet를 읽어 **Unity C# 코드 / Unreal C++ 헤더**를 코드 제네레이션하고, 전체 데이터를 다시 읽을 수 있는 **Json**으로 저장하는 도구입니다. 
 데이터를 담은 Json 생성 기능과, 코드 생성을 통해 각 Unreal과 Unity에서 쓸 수 있는 Serializable 객체를 제공합니다. 
+생성된 Serializable 객체는 Unity와 Unreal에서 제공하는 Json Utility를 사용하여, 데이터를 쉽게 담아 사용할 수 있습니다. 
 
 
 ## 목차
