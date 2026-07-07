@@ -1,8 +1,8 @@
 # Sheet Schema Builder
 
-Google Sheet를 읽어 **Unity C# 코드 / Unreal C++ 헤더**를 코드 제네레이션하고, 전체 데이터를 다시 읽을 수 있는 **Json**으로 저장하는 도구입니다. 
-데이터를 담은 Json 생성 기능과, 코드 생성을 통해 각 Unreal과 Unity에서 쓸 수 있는 Serializable 객체를 제공합니다. 
-생성된 Serializable 객체는 Unity와 Unreal에서 제공하는 Json Utility를 사용하여, 데이터를 쉽게 담아 사용할 수 있습니다. 
+Google Sheet를 읽어 **Unity C# 코드 / Unreal C++ 헤더**를 코드 제네레이션하고, 전체 데이터를 다시 읽을 수 있는 **Json**으로 저장하는 도구입니다. <br>
+데이터를 담은 Json 생성 기능과, 코드 생성을 통해 각 Unreal과 Unity에서 쓸 수 있는 Serializable 객체를 제공합니다. <br>
+생성된 Serializable 객체는 Unity와 Unreal에서 제공하는 Json Utility를 사용하여, 데이터를 쉽게 담아 사용할 수 있습니다. <br> 
 
 
 ## 목차
@@ -179,7 +179,7 @@ OutputPath = ./Generated/SheetDataBase.json
 
 |유형| 설명|
 |---|---|
-|**ServiceAccount (권장)**| Google Cloud Console에서 서비스 계정을 만들고 JSON 키를 내려받아 `credentials/`에 두고, <br> 스프레드시트를 서비스 계정 이메일에 **뷰어로 공유**합니다.  (Sheets API 사용 설정 필요. `credentials/`는 gitignore 되어 있음)|
+|**ServiceAccount (권장)**| Google Cloud Console에서 서비스 계정을 만들고 JSON 키를 내려받아 `credentials/`에 두고, <br> 스프레드시트를 서비스 계정 이메일에 **뷰어로 공유**합니다. <br> (Sheets API 사용 설정 필요. `credentials/`는 gitignore 되어 있음)|
 |**ApiKey**| 시트가 "링크가 있는 모든 사용자"에게 공개된 경우만 사용 가능합니다.|
 | **Local**| 네트워크 없이 `LocalDirectory`에 둔 `{시트이름}.tsv` 파일로 테스트합니다.|
 
