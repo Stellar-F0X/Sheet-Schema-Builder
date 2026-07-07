@@ -45,10 +45,36 @@ namespace DataBuilder
 		/// <summary>시트 로드, 코드 생성, Json 내보내기 작업을 순서대로 실행한다.</summary>
 		private static async Task RunAsync(string[] args)
 		{
-			bool force = args.Contains("--force", StringComparer.OrdinalIgnoreCase);
-			string iniPath = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "Sheet-Schema-Builder.ini";
+			bool force = false;
+			string iniPath = "Sheet-Schema-Builder.ini";
+			ECodeGenTarget? targetOverride = null;
+			for (int i = 0; i < args.Length; i++)
+			{
+				string arg = args[i];
+				if (arg.Equals("--force", StringComparison.OrdinalIgnoreCase))
+				{
+					force = true;
+				}
+				else if (arg.Equals("--target", StringComparison.OrdinalIgnoreCase))
+				{
+					if (++i >= args.Length || Enum.TryParse(args[i], ignoreCase: true, out ECodeGenTarget parsedTarget) == false)
+					{
+						throw new SheetSchemaBuilderException("--target 값이 잘못되었습니다. (Unity | Unreal)");
+					}
 
-			BuilderConfig config = BuilderConfig.Load(iniPath);
+					targetOverride = parsedTarget;
+				}
+				else if (arg.StartsWith("--", StringComparison.Ordinal))
+				{
+					throw new SheetSchemaBuilderException($"지원하지 않는 옵션입니다: {arg}");
+				}
+				else
+				{
+					iniPath = arg;
+				}
+			}
+
+			BuilderConfig config = BuilderConfig.Load(iniPath, targetOverride);
 			Console.WriteLine($"설정 로드: {Path.GetFullPath(iniPath)} (AuthMode: {config.AuthMode}, CodeGenTarget: {config.CodeGenTarget})");
 
 			// 1. 시트 데이터를 가져온다.

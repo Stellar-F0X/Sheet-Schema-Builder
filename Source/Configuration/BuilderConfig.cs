@@ -101,7 +101,7 @@ namespace DataBuilder.Configuration
 
 
 		/// <summary>ini 파일에서 빌드 설정을 로드한다.</summary>
-		public static BuilderConfig Load(string iniPath)
+		public static BuilderConfig Load(string iniPath, ECodeGenTarget? targetOverride = null)
 		{
 			IniFile ini = IniFile.Load(iniPath);
 			string baseDir = Path.GetDirectoryName(Path.GetFullPath(iniPath))!;
@@ -112,11 +112,19 @@ namespace DataBuilder.Configuration
 				throw new SheetSchemaBuilderException($"[GoogleSheet] AuthMode 값이 잘못되었습니다: '{authModeText}' (ServiceAccount | ApiKey | Local)");
 			}
 
-			string codeGenTargetText = ini.Get("CodeGen", "Target", "Unity");
+			ECodeGenTarget codeGenTarget;
 
-			if (Enum.TryParse(codeGenTargetText, ignoreCase: true, out ECodeGenTarget codeGenTarget) == false)
+			if (targetOverride.HasValue)
 			{
-				throw new SheetSchemaBuilderException($"[CodeGen] Target 값이 잘못되었습니다: '{codeGenTargetText}' (Unity | Unreal)");
+				codeGenTarget = targetOverride.Value;
+			}
+			else
+			{
+				string codeGenTargetText = ini.Get("CodeGen", "Target", "Unity");
+				if (Enum.TryParse(codeGenTargetText, ignoreCase: true, out codeGenTarget) == false)
+				{
+					throw new SheetSchemaBuilderException($"[CodeGen] Target 값이 잘못되었습니다: '{codeGenTargetText}' (Unity | Unreal)");
+				}
 			}
 
 			string[] sheetFilter = ini.Get("GoogleSheet", "Sheets").Split(',').Select(sheet => sheet.Trim()).Where(sheet => sheet.Length > 0).ToArray();

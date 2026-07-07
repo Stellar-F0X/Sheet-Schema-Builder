@@ -54,6 +54,8 @@ dotnet publish Source.Native/Sheet-Schema-Builder.Native.csproj -c Release
 각 엔진의 에디터 메뉴에서 `.ini` 옵션을 수정하고 빌더를 실행할 수 있습니다. <br>
 `Save INI`를 눌렀을 때만 설정 파일이 저장되며, `Run` / `Run Force`는 현재 저장되어 있는 `.ini` 파일을 기준으로 실행합니다.
 
+Unity 에디터는 항상 Unity Target으로, Unreal 에디터는 항상 Unreal Target으로 실행합니다. 에디터 UI에서는 Target을 선택하지 않으며, 저장된 `.ini`의 Target 값이 잘못되어 있어도 각 에디터가 자기 엔진 값을 강제로 넘깁니다.
+
 Unity 에디터 버튼은 같은 프로세스 안에서 빌더 DLL의 `DataBuilder.SheetSchemaBuilder.Process(...)`를 직접 호출합니다. Unreal 에디터 버튼은 Python에서 `USheetSchemaBuilderEditorLibrary`를 호출하고, C++ Editor 모듈이 `SheetSchemaBuilderNative.dll`의 exported 함수를 호출합니다. 두 엔진 모두 에디터 실행 시 별도 `dotnet` 프로세스를 만들지 않습니다.
 
 DLL에는 엔진별 기본 템플릿이 embedded resource로 포함됩니다. 또한 `Package/Unity/UnityCodeTemplates.txt`, `Package/Unreal/UnrealCodeTemplate.txt`처럼 DLL 주변의 엔진별 템플릿 파일이 있으면 그 파일을 우선 사용합니다.
@@ -82,7 +84,7 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 ## 동작 순서
 
 1. `.ini`에 적힌 인증 정보로 Google Sheet에 접근해 모든(또는 지정한) 시트를 읽는다.
-2. `Target`에 따라 Unity용 C# 구조체 또는 Unreal용 C++ `USTRUCT` 헤더를 생성한다.
+2. 실행 Target에 따라 Unity용 C# 구조체 또는 Unreal용 C++ `USTRUCT` 헤더를 생성한다.
 3. 모든 시트의 배열과 Key-Value 인덱스를 가진 데이터베이스 타입을 생성한다.
 4. 전체 시트 데이터를 생성된 데이터베이스 타입에 맞는 Json으로 저장한다.
 
@@ -155,7 +157,7 @@ LocalDirectory =                 ; Local 모드일 때 (.tsv 디렉터리)
 Sheets =                         ; 비우면 전체 시트
 
 [CodeGen]
-Target = Unity                    ; Unity | Unreal
+Target = Unity                    ; CLI/수동 실행용. 엔진 에디터에서는 각 엔진 값으로 강제됨.
 Namespace = BS.Data
 DatabaseClassName = SheetDataBase
 DatabaseOutputDirectory = ./Generated/Database

@@ -20,7 +20,7 @@ namespace SheetSchemaBuilderNative
                 Console.SetOut(output);
                 Console.SetError(error);
                 string iniPathText = iniPath == null ? "Sheet-Schema-Builder.ini" : new string(iniPath);
-                string[] args = force != 0 ? new[] { iniPathText, "--force" } : new[] { iniPathText };
+                string[] args = force != 0 ? new[] { iniPathText, "--target", "Unreal", "--force" } : new[] { iniPathText, "--target", "Unreal" };
                 int exitCode = DataBuilder.SheetSchemaBuilder.Process(args).GetAwaiter().GetResult();
                 output.Flush();
                 error.Flush();

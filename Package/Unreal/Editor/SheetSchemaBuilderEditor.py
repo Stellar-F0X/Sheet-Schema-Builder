@@ -238,10 +238,6 @@ class SheetSchemaBuilderWindow:
         self.add_entry_row(container, "google_sheet", "sheets", "Sheets")
 
         self.add_section(container, "Code Generation")
-        target_frame = self.ttk.Frame(container)
-        target_frame.pack(fill="x", pady=2)
-        self.ttk.Label(target_frame, text="Target", width=22).pack(side="left")
-        self.ttk.Entry(target_frame, textvariable=self.tk.StringVar(value=TARGET_NAME), state="readonly").pack(side="left", fill="x", expand=True)
         self.add_entry_row(container, "code_gen", "namespace", "Namespace")
         self.add_entry_row(container, "code_gen", "database_class_name", "Database Class Name")
         self.add_entry_row(container, "code_gen", "database_output_directory", "Database Output Directory", browse="directory")

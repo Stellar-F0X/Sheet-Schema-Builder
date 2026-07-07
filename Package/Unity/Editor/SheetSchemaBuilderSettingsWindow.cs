@@ -86,11 +86,6 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
             EditorGUILayout.Space(12);
             EditorGUILayout.LabelField("Code Generation", EditorStyles.boldLabel);
-            using (new EditorGUI.DisabledScope(true))
-            {
-                EditorGUILayout.TextField("Target", TargetName);
-            }
-
             _settings.CodeGen.Namespace = EditorGUILayout.TextField("Namespace", _settings.CodeGen.Namespace);
             _settings.CodeGen.DatabaseClassName = EditorGUILayout.TextField("Database Class Name", _settings.CodeGen.DatabaseClassName);
             DrawPathField("Database Output Directory", ref _settings.CodeGen.DatabaseOutputDirectory, true, string.Empty);
@@ -175,7 +170,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     Console.SetError(error);
                     try
                     {
-                        string[] args = force ? new[] { _iniPath, "--force" } : new[] { _iniPath };
+                        string[] args = force ? new[] { _iniPath, "--target", TargetName, "--force" } : new[] { _iniPath, "--target", TargetName };
                         exitCode = await Task.Run(() => DataBuilder.SheetSchemaBuilder.Process(args));
                     }
                     finally
