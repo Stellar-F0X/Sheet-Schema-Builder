@@ -2,7 +2,6 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
         <SelfContained>true</SelfContained>
         <PublishAot>true</PublishAot>
         <NativeLib>Shared</NativeLib>
@@ -23,13 +22,25 @@
 
     <Target Name="CopyNativeAotOutputToUnrealPackage" AfterTargets="Publish">
         <PropertyGroup>
-            <UnrealNativeOutputDirectory>$(MSBuildProjectDirectory)\..\Package\Unreal\Binaries\ThirdParty\SheetSchemaBuilder\Win64</UnrealNativeOutputDirectory>
+            <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'win-x64'">Win64</UnrealNativePlatformDirectory>
+            <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'linux-x64'">Linux</UnrealNativePlatformDirectory>
+            <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">Mac</UnrealNativePlatformDirectory>
+            <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'osx-x64'">Mac</UnrealNativePlatformDirectory>
+            <UnrealNativeOutputDirectory>$(MSBuildProjectDirectory)\..\Package\Unreal\Binaries\ThirdParty\SheetSchemaBuilder\$(UnrealNativePlatformDirectory)</UnrealNativeOutputDirectory>
         </PropertyGroup>
 
+        <Error Text="RuntimeIdentifier is required. Publish with -r win-x64, -r linux-x64, -r osx-arm64, or -r osx-x64." Condition="'$(RuntimeIdentifier)' == ''" />
+        <Error Text="Unsupported Unreal native RuntimeIdentifier: $(RuntimeIdentifier)" Condition="'$(UnrealNativePlatformDirectory)' == ''" />
+
         <ItemGroup>
-            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).dll" />
-            <UnrealNativeOutputFiles Include="$(PublishDir)..\native\$(AssemblyName).lib" Condition="Exists('$(PublishDir)..\native\$(AssemblyName).lib')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).dll" Condition="Exists('$(PublishDir)$(AssemblyName).dll')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).so" Condition="Exists('$(PublishDir)$(AssemblyName).so')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)lib$(AssemblyName).so" Condition="Exists('$(PublishDir)lib$(AssemblyName).so')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).dylib" Condition="Exists('$(PublishDir)$(AssemblyName).dylib')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)lib$(AssemblyName).dylib" Condition="Exists('$(PublishDir)lib$(AssemblyName).dylib')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)../native/$(AssemblyName).lib" Condition="Exists('$(PublishDir)../native/$(AssemblyName).lib')" />
             <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).pdb" Condition="Exists('$(PublishDir)$(AssemblyName).pdb')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).dbg" Condition="Exists('$(PublishDir)$(AssemblyName).dbg')" />
         </ItemGroup>
 
         <MakeDir Directories="$(UnrealNativeOutputDirectory)" />

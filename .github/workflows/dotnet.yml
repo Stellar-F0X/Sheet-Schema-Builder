@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build Unity and Unreal packages
+  unity:
+    name: Build Unity package
     runs-on: windows-latest
 
     steps:
@@ -28,26 +28,64 @@ jobs:
       - name: Build managed builder
         run: dotnet build Source/Sheet-Schema-Builder.csproj --configuration Release --no-restore
 
+      - name: Upload Unity package
+        uses: actions/upload-artifact@v4
+        with:
+          name: SheetSchemaBuilder-Unity-Package
+          path: Package/Unity
+          if-no-files-found: error
+
+  unreal-native:
+    name: Build Unreal native package (${{ matrix.unreal-platform }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            unreal-platform: Win64
+            native-pattern: SheetSchemaBuilderNative.dll
+          - os: ubuntu-latest
+            rid: linux-x64
+            unreal-platform: Linux
+            native-pattern: "*.so"
+          - os: macos-latest
+            rid: osx-arm64
+            unreal-platform: Mac
+            native-pattern: "*.dylib"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Linux NativeAOT dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
       - name: Restore Unreal NativeAOT builder
-        run: dotnet restore Source.Native/Sheet-Schema-Builder.Native.csproj
+        run: dotnet restore Source.Native/Sheet-Schema-Builder.Native.csproj -r ${{ matrix.rid }}
 
       - name: Publish Unreal NativeAOT builder
-        run: dotnet publish Source.Native/Sheet-Schema-Builder.Native.csproj --configuration Release --no-restore
+        run: dotnet publish Source.Native/Sheet-Schema-Builder.Native.csproj --configuration Release --runtime ${{ matrix.rid }} --no-restore
 
       - name: Verify Unreal native artifacts
         shell: pwsh
         run: |
-          $nativeDir = "Package/Unreal/Binaries/ThirdParty/SheetSchemaBuilder/Win64"
-          $requiredFiles = @(
-            "$nativeDir/SheetSchemaBuilderNative.dll",
-            "$nativeDir/SheetSchemaBuilderNative.lib",
-            "$nativeDir/SheetSchemaBuilderNative.pdb"
-          )
+          $nativeDir = "Package/Unreal/Binaries/ThirdParty/SheetSchemaBuilder/${{ matrix.unreal-platform }}"
+          if (-not (Test-Path $nativeDir)) {
+            throw "Missing native artifact directory: $nativeDir"
+          }
 
-          foreach ($file in $requiredFiles) {
-            if (-not (Test-Path $file)) {
-              throw "Missing native artifact: $file"
-            }
+          $nativeFiles = @(Get-ChildItem -Path $nativeDir -File -Filter '${{ matrix.native-pattern }}')
+          if ($nativeFiles.Count -eq 0) {
+            throw "Missing native artifact matching '${{ matrix.native-pattern }}' in $nativeDir"
           }
 
           $removedManagedFiles = @(
@@ -63,16 +101,9 @@ jobs:
             }
           }
 
-      - name: Upload Unity package
-        uses: actions/upload-artifact@v4
-        with:
-          name: SheetSchemaBuilder-Unity-Package
-          path: Package/Unity
-          if-no-files-found: error
-
       - name: Upload Unreal package
         uses: actions/upload-artifact@v4
         with:
-          name: SheetSchemaBuilder-Unreal-Package
+          name: SheetSchemaBuilder-Unreal-Package-${{ matrix.unreal-platform }}
           path: Package/Unreal
           if-no-files-found: error

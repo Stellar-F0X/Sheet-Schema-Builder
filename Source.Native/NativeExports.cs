@@ -7,7 +7,7 @@ namespace SheetSchemaBuilderNative
     public static unsafe class NativeExports
     {
         [UnmanagedCallersOnly(EntryPoint = "SheetSchemaBuilder_Process", CallConvs = new[] { typeof(CallConvCdecl) })]
-        public static int Process(char* iniPath, int force, delegate* unmanaged[Cdecl]<char*, void> logCallback)
+        public static int Process(byte* iniPath, int force, delegate* unmanaged[Cdecl]<byte*, void> logCallback)
         {
             TextWriter originalOutput = Console.Out;
             TextWriter originalError = Console.Error;
@@ -19,7 +19,7 @@ namespace SheetSchemaBuilderNative
                 using StringWriter error = new StringWriter(logBuilder);
                 Console.SetOut(output);
                 Console.SetError(error);
-                string iniPathText = iniPath == null ? "Sheet-Schema-Builder.ini" : new string(iniPath);
+                string iniPathText = iniPath == null ? "Sheet-Schema-Builder.ini" : Marshal.PtrToStringUTF8((IntPtr)iniPath) ?? "Sheet-Schema-Builder.ini";
                 string[] args = force != 0 ? new[] { iniPathText, "--target", "Unreal", "--force" } : new[] { iniPathText, "--target", "Unreal" };
                 int exitCode = DataBuilder.SheetSchemaBuilder.Process(args).GetAwaiter().GetResult();
                 output.Flush();
@@ -39,15 +39,15 @@ namespace SheetSchemaBuilderNative
             }
         }
 
-        private static void SendLog(delegate* unmanaged[Cdecl]<char*, void> logCallback, string log)
+        private static void SendLog(delegate* unmanaged[Cdecl]<byte*, void> logCallback, string log)
         {
             if (logCallback == null || string.IsNullOrEmpty(log))
             {
                 return;
             }
 
-            string nullTerminatedLog = log + '\0';
-            fixed (char* logPointer = nullTerminatedLog)
+            byte[] nullTerminatedLog = Encoding.UTF8.GetBytes(log + '\0');
+            fixed (byte* logPointer = nullTerminatedLog)
             {
                 logCallback(logPointer);
             }

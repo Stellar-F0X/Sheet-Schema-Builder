@@ -2,12 +2,11 @@
 
 #include <stdint.h>
 
-#ifndef SHEET_SCHEMA_BUILDER_NATIVE_API
-#define SHEET_SCHEMA_BUILDER_NATIVE_API __declspec(dllimport)
+#if defined(_WIN32)
+#define SHEET_SCHEMA_BUILDER_CALL __cdecl
+#else
+#define SHEET_SCHEMA_BUILDER_CALL
 #endif
 
-extern "C"
-{
-    typedef void(__cdecl* FSheetSchemaBuilderLogCallback)(const wchar_t* Message);
-    SHEET_SCHEMA_BUILDER_NATIVE_API int32_t __cdecl SheetSchemaBuilder_Process(const wchar_t* IniPath, int32_t Force, FSheetSchemaBuilderLogCallback LogCallback);
-}
+typedef void(SHEET_SCHEMA_BUILDER_CALL* FSheetSchemaBuilderLogCallback)(const char* Message);
+typedef int32_t(SHEET_SCHEMA_BUILDER_CALL* FSheetSchemaBuilderProcess)(const char* IniPath, int32_t Force, FSheetSchemaBuilderLogCallback LogCallback);
