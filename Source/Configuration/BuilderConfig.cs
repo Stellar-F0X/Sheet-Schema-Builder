@@ -119,8 +119,7 @@ namespace DataBuilder.Configuration
 				throw new SheetSchemaBuilderException($"[CodeGen] Target 값이 잘못되었습니다: '{codeGenTargetText}' (Unity | Unreal)");
 			}
 
-			const StringSplitOptions SPLIT_OPTIONS = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
-			string[] sheetFilter = ini.Get("GoogleSheet", "Sheets").Split(',', SPLIT_OPTIONS);
+			string[] sheetFilter = ini.Get("GoogleSheet", "Sheets").Split(',').Select(sheet => sheet.Trim()).Where(sheet => sheet.Length > 0).ToArray();
 
 			string databaseDir = ResolvePath(baseDir, ini.GetRequired("CodeGen", "DatabaseOutputDirectory"));
 			string structDir = ini.Get("CodeGen", "StructOutputDirectory");

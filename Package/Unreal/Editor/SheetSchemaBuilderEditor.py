@@ -1,7 +1,5 @@
 import os
-import subprocess
 import sys
-import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -13,7 +11,6 @@ except ImportError:
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 INI_PATH = PLUGIN_ROOT / "Sheet-Schema-Builder.ini"
-DLL_PATH = PLUGIN_ROOT / "Sheet-Schema-Builder.dll"
 TARGET_NAME = "Unreal"
 
 
@@ -126,16 +123,26 @@ class BuilderIniSettings:
         ])
 
 
+@dataclass
+class BuilderRunResult:
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+
+
 class BuilderRunner:
-    def __init__(self, dll_path):
-        self.dll_path = dll_path
-
     def run(self, ini_path, force):
-        command = ["dotnet", str(self.dll_path), str(ini_path)]
-        if force:
-            command.append("--force")
+        if unreal is None or not hasattr(unreal, "SheetSchemaBuilderEditorLibrary"):
+            return BuilderRunResult(1, "", "SheetSchemaBuilderEditor C++ module is not available.")
 
-        return subprocess.run(command, cwd=str(ini_path.parent), capture_output=True, text=True, encoding="utf-8")
+        library = unreal.SheetSchemaBuilderEditorLibrary
+        run = getattr(library, "run_sheet_schema_builder", None)
+        get_last_output = getattr(library, "get_last_output", None)
+        if run is None or get_last_output is None:
+            return BuilderRunResult(1, "", "SheetSchemaBuilderEditor C++ API is not available.")
+
+        exit_code = run(str(ini_path), bool(force))
+        return BuilderRunResult(exit_code, get_last_output(), "")
 
 
 def register_menu():
@@ -159,7 +166,7 @@ def register_menu():
 
     entry = unreal.ToolMenuEntry(name="SheetSchemaBuilder.OpenSettings", type=unreal.MultiBlockType.MENU_ENTRY)
     entry.set_label("Sheet Schema Builder")
-    entry.set_tool_tip("Edit Sheet-Schema-Builder.ini and run the builder DLL.")
+    entry.set_tool_tip("Edit Sheet-Schema-Builder.ini and run the native builder.")
     entry.set_string_command(unreal.ToolMenuStringCommandType.PYTHON, "", command)
     menu.add_menu_entry("SheetSchemaBuilder", entry)
     menus.refresh_all_widgets()
@@ -187,7 +194,7 @@ class SheetSchemaBuilderWindow:
         self.messagebox = messagebox
         self.ini_path = INI_PATH
         self.settings = BuilderIniSettings.load(self.ini_path)
-        self.runner = BuilderRunner(DLL_PATH)
+        self.runner = BuilderRunner()
         self.vars = {}
         self.root = None
         self.output = None
@@ -306,22 +313,15 @@ class SheetSchemaBuilderWindow:
             self.messagebox.showerror("Sheet Schema Builder", f"INI file does not exist. Press Save INI before running.\n{self.ini_path}")
             return
 
-        if not self.runner.dll_path.exists():
-            self.messagebox.showerror("Sheet Schema Builder", f"Sheet-Schema-Builder.dll was not found:\n{self.runner.dll_path}")
-            return
-
         self.output.insert("end", "Running Sheet Schema Builder...\n")
         self.output.see("end")
+        self.root.update_idletasks()
 
-        def run_on_thread():
-            try:
-                completed = self.runner.run(self.ini_path, force)
-                output = completed.stdout + completed.stderr
-                self.root.after(0, lambda: self.finish_run(completed.returncode, output))
-            except Exception as exception:
-                self.root.after(0, lambda: self.finish_run(1, str(exception)))
-
-        threading.Thread(target=run_on_thread, daemon=True).start()
+        try:
+            completed = self.runner.run(self.ini_path, force)
+            self.finish_run(completed.returncode, completed.stdout + completed.stderr)
+        except Exception as exception:
+            self.finish_run(1, str(exception))
 
     def finish_run(self, exit_code, output):
         self.output.insert("end", output + "\n")

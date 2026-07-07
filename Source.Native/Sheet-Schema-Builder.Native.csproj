@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <SelfContained>true</SelfContained>
+        <PublishAot>true</PublishAot>
+        <NativeLib>Shared</NativeLib>
+        <AssemblyName>SheetSchemaBuilderNative</AssemblyName>
+        <RootNamespace>SheetSchemaBuilderNative</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <DefineConstants>$(DefineConstants);NATIVE_AOT</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="..\Source\**\*.cs" Exclude="..\Source\Program.cs;..\Source\Compatibility\CSharpFeaturePolyfills.cs;..\Source\bin\**\*.cs;..\Source\obj\**\*.cs" LinkBase="Core" />
+        <EmbeddedResource Include="..\Package\Unity\*.txt" LogicalName="Unity.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="..\Package\Unreal\*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <Target Name="CopyNativeAotOutputToUnrealPackage" AfterTargets="Publish">
+        <PropertyGroup>
+            <UnrealNativeOutputDirectory>$(MSBuildProjectDirectory)\..\Package\Unreal\Binaries\ThirdParty\SheetSchemaBuilder\Win64</UnrealNativeOutputDirectory>
+        </PropertyGroup>
+
+        <ItemGroup>
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).dll" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)..\native\$(AssemblyName).lib" Condition="Exists('$(PublishDir)..\native\$(AssemblyName).lib')" />
+            <UnrealNativeOutputFiles Include="$(PublishDir)$(AssemblyName).pdb" Condition="Exists('$(PublishDir)$(AssemblyName).pdb')" />
+        </ItemGroup>
+
+        <MakeDir Directories="$(UnrealNativeOutputDirectory)" />
+        <Copy SourceFiles="@(UnrealNativeOutputFiles)" DestinationFolder="$(UnrealNativeOutputDirectory)\" SkipUnchangedFiles="true" />
+    </Target>
+
+</Project>

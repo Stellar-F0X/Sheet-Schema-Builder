@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net10.0;netstandard2.1</TargetFrameworks>
+        <RootNamespace>Sheet_Schema_Builder</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="../Package/Unity/*.txt" LogicalName="Unity.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="../Package/Unreal/*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+        <Compile Remove="Program.cs" />
+        <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    </ItemGroup>
+
+    <Target Name="CopyBuildOutputToPackages" AfterTargets="Build">
+        <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+            <UnityPackageOutputFiles Include="$(TargetPath)" />
+            <UnityPackageOutputFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+            <UnityPackageOutputFiles Include="@(ReferenceCopyLocalPaths)" />
+        </ItemGroup>
+
+        <MakeDir Directories="$(MSBuildProjectDirectory)\..\Package\Unity" Condition="'@(UnityPackageOutputFiles)' != ''" />
+        <Delete Files="$(MSBuildProjectDirectory)\..\Package\Unity\$(TargetName).deps.json;$(MSBuildProjectDirectory)\..\Package\Unity\$(TargetName).runtimeconfig.json" Condition="'@(UnityPackageOutputFiles)' != ''" TreatErrorsAsWarnings="true" />
+        <Copy SourceFiles="@(UnityPackageOutputFiles)" DestinationFolder="$(MSBuildProjectDirectory)\..\Package\Unity\" SkipUnchangedFiles="true" Condition="'@(UnityPackageOutputFiles)' != ''" />
+        <Delete Files="$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).dll;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).pdb;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).deps.json;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).runtimeconfig.json" Condition="'$(TargetFramework)' == 'net10.0'" TreatErrorsAsWarnings="true" />
+    </Target>
+
+</Project>

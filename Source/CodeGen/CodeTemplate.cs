@@ -34,7 +34,7 @@ namespace DataBuilder.CodeGen
                 source = source.Replace("{{" + key + "}}", value);
             }
 
-            string normalized = source.ReplaceLineEndings(Environment.NewLine);
+            string normalized = NormalizeLineEndings(source, Environment.NewLine);
             return normalized.TrimEnd('\r', '\n');
         }
 
@@ -119,7 +119,7 @@ namespace DataBuilder.CodeGen
                 }
 
                 using StreamReader reader = new StreamReader(stream, Encoding.UTF8);
-                return reader.ReadToEnd().ReplaceLineEndings("\n").Split('\n');
+                return NormalizeLineEndings(reader.ReadToEnd(), "\n").Split('\n');
             }
 
             throw new SheetSchemaBuilderException($"CodeGen 템플릿 파일을 찾을 수 없습니다: {templateFileName}");
@@ -128,6 +128,7 @@ namespace DataBuilder.CodeGen
         /// <summary>실행 출력 폴더와 소스 폴더에서 엔진별 템플릿 파일을 찾는다.</summary>
         private static string? FindTemplatePath(string templateName, string templateEngineDirectory)
         {
+#if !NATIVE_AOT
             string? assemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             if (string.IsNullOrWhiteSpace(assemblyDirectory) == false)
             {
@@ -137,6 +138,7 @@ namespace DataBuilder.CodeGen
                     return assemblyPath;
                 }
             }
+#endif
 
             string? appBasePath = FindTemplatePathUnder(AppContext.BaseDirectory, templateEngineDirectory, templateName);
             if (appBasePath != null)
@@ -213,6 +215,11 @@ namespace DataBuilder.CodeGen
 
             yield return _LEGACY_TEMPLATE_RELATIVE_DIRECTORY + "." + templateFileName;
             yield return templateFileName;
+        }
+
+        private static string NormalizeLineEndings(string text, string replacement)
+        {
+            return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", replacement);
         }
     }
 }

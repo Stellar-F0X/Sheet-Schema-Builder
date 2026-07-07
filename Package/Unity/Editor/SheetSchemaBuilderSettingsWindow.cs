@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -160,26 +159,41 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 return;
             }
 
-            string dllPath = FindBuilderDllPath();
-            if (File.Exists(dllPath) == false)
-            {
-                EditorUtility.DisplayDialog("Sheet Schema Builder", "Sheet-Schema-Builder.dll was not found.\n\n" + dllPath, "OK");
-                return;
-            }
-
             _isRunning = true;
             try
             {
                 EditorUtility.DisplayProgressBar("Sheet Schema Builder", "Running builder...", 0.5f);
-                BuilderRunResult result = await BuilderRunner.RunAsync(dllPath, _iniPath, force);
-                string log = result.StandardOutput + result.StandardError;
+                StringBuilder logBuilder = new StringBuilder();
+                TextWriter originalOutput = Console.Out;
+                TextWriter originalError = Console.Error;
+                int exitCode;
 
-                if (string.IsNullOrWhiteSpace(result.StandardOutput) == false)
+                using (StringWriter output = new StringWriter(logBuilder))
+                using (StringWriter error = new StringWriter(logBuilder))
                 {
-                    Debug.Log(result.StandardOutput);
+                    Console.SetOut(output);
+                    Console.SetError(error);
+                    try
+                    {
+                        string[] args = force ? new[] { _iniPath, "--force" } : new[] { _iniPath };
+                        exitCode = await Task.Run(() => DataBuilder.SheetSchemaBuilder.Process(args));
+                    }
+                    finally
+                    {
+                        output.Flush();
+                        error.Flush();
+                        Console.SetOut(originalOutput);
+                        Console.SetError(originalError);
+                    }
                 }
 
-                if (result.ExitCode == 0)
+                string log = logBuilder.ToString();
+                if (string.IsNullOrWhiteSpace(log) == false)
+                {
+                    Debug.Log(log);
+                }
+
+                if (exitCode == 0)
                 {
                     AssetDatabase.Refresh();
                     ShowNotification(new GUIContent("Sheet Schema Builder completed"));
@@ -188,7 +202,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 else
                 {
                     Debug.LogError(log);
-                    EditorUtility.DisplayDialog("Sheet Schema Builder Failed", string.IsNullOrWhiteSpace(log) ? "Exit code: " + result.ExitCode : log, "OK");
+                    EditorUtility.DisplayDialog("Sheet Schema Builder Failed", string.IsNullOrWhiteSpace(log) ? "Exit code: " + exitCode : log, "OK");
                 }
             }
             catch (Exception exception)
@@ -214,13 +228,6 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
             string relativePath = Path.GetRelativePath(iniDirectory, selectedPath).Replace('\\', '/');
             return relativePath.StartsWith("..", StringComparison.Ordinal) ? selectedPath.Replace('\\', '/') : "./" + relativePath;
-        }
-
-        private string FindBuilderDllPath()
-        {
-            string iniDirectory = Path.GetDirectoryName(_iniPath) ?? string.Empty;
-            string iniDirectoryDll = Path.Combine(iniDirectory, "Sheet-Schema-Builder.dll");
-            return File.Exists(iniDirectoryDll) ? iniDirectoryDll : Path.Combine(FindPackageRoot(), "Sheet-Schema-Builder.dll");
         }
 
         private static string FindPackageRoot()
@@ -429,70 +436,5 @@ namespace SheetSchemaBuilder.UnityEditorTools
             }
         }
 
-        private static class BuilderRunner
-        {
-            public static Task<BuilderRunResult> RunAsync(string dllPath, string iniPath, bool force)
-            {
-                return Task.Run(() =>
-                {
-                    string arguments = Quote(dllPath) + " " + Quote(iniPath) + (force ? " --force" : string.Empty);
-                    ProcessStartInfo startInfo = new ProcessStartInfo
-                    {
-                        FileName = "dotnet",
-                        Arguments = arguments,
-                        WorkingDirectory = Path.GetDirectoryName(iniPath) ?? Directory.GetCurrentDirectory(),
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true,
-                        StandardOutputEncoding = Encoding.UTF8,
-                        StandardErrorEncoding = Encoding.UTF8
-                    };
-
-                    using (Process process = Process.Start(startInfo))
-                    {
-                        if (process == null)
-                        {
-                            throw new InvalidOperationException("Failed to start dotnet process.");
-                        }
-
-                        string standardOutput = process.StandardOutput.ReadToEnd();
-                        string standardError = process.StandardError.ReadToEnd();
-                        process.WaitForExit();
-                        return new BuilderRunResult(process.ExitCode, standardOutput, standardError);
-                    }
-                });
-            }
-
-            private static string Quote(string value)
-            {
-                return "\"" + value.Replace("\"", "\\\"") + "\"";
-            }
-        }
-
-        private readonly struct BuilderRunResult
-        {
-            public BuilderRunResult(int exitCode, string standardOutput, string standardError)
-            {
-                ExitCode = exitCode;
-                StandardOutput = standardOutput;
-                StandardError = standardError;
-            }
-
-            public int ExitCode
-            {
-                get;
-            }
-
-            public string StandardOutput
-            {
-                get;
-            }
-
-            public string StandardError
-            {
-                get;
-            }
-        }
     }
 }

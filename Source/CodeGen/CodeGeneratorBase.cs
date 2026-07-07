@@ -103,7 +103,7 @@ namespace DataBuilder.CodeGen
 			}
 
 			string indent = new string(' ', spaceCount);
-			string[] lines = text.ReplaceLineEndings(Environment.NewLine).Split(Environment.NewLine);
+			string[] lines = text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", Environment.NewLine).Split(new[] { Environment.NewLine }, StringSplitOptions.None);
 			return string.Join(Environment.NewLine, lines.Select(line => line.Length == 0 ? line : indent + line));
 		}
 	}

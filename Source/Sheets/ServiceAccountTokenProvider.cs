@@ -68,20 +68,13 @@ namespace DataBuilder.Sheets
 		{
 			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-			string header = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { alg = "RS256", typ = "JWT" }));
-			string claims = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new
-			{
-				iss = _clientEmail,
-				scope = _SCOPE,
-				aud = _tokenUri,
-				iat = now,
-				exp = now + 3600,
-			}));
+			string header = Base64UrlEncode(CreateJwtHeaderJson());
+			string claims = Base64UrlEncode(CreateJwtClaimsJson(now));
 
 			string signingInput = $"{header}.{claims}";
 
 			using RSA rsa = RSA.Create();
-			rsa.ImportFromPem(_privateKeyPem);
+			ImportPrivateKey(rsa, _privateKeyPem);
 			byte[] signature = rsa.SignData
 			(
 				Encoding.ASCII.GetBytes(signingInput),
@@ -119,6 +112,61 @@ namespace DataBuilder.Sheets
 			              .TrimEnd('=')
 			              .Replace('+', '-')
 			              .Replace('/', '_');
+		}
+
+		private byte[] CreateJwtClaimsJson(long now)
+		{
+			using MemoryStream stream = new MemoryStream();
+			using Utf8JsonWriter writer = new Utf8JsonWriter(stream);
+			writer.WriteStartObject();
+			writer.WriteString("iss", _clientEmail);
+			writer.WriteString("scope", _SCOPE);
+			writer.WriteString("aud", _tokenUri);
+			writer.WriteNumber("iat", now);
+			writer.WriteNumber("exp", now + 3600);
+			writer.WriteEndObject();
+			writer.Flush();
+			return stream.ToArray();
+		}
+
+		private static byte[] CreateJwtHeaderJson()
+		{
+			using MemoryStream stream = new MemoryStream();
+			using Utf8JsonWriter writer = new Utf8JsonWriter(stream);
+			writer.WriteStartObject();
+			writer.WriteString("alg", "RS256");
+			writer.WriteString("typ", "JWT");
+			writer.WriteEndObject();
+			writer.Flush();
+			return stream.ToArray();
+		}
+
+		private static void ImportPrivateKey(RSA rsa, string privateKeyPem)
+		{
+#if NETSTANDARD2_1
+			const string pkcs8Header = "-----BEGIN PRIVATE KEY-----";
+			const string pkcs8Footer = "-----END PRIVATE KEY-----";
+			const string rsaHeader = "-----BEGIN RSA PRIVATE KEY-----";
+			const string rsaFooter = "-----END RSA PRIVATE KEY-----";
+			bool isRsaPrivateKey = privateKeyPem.Contains(rsaHeader);
+			string base64 = privateKeyPem.Replace(isRsaPrivateKey ? rsaHeader : pkcs8Header, string.Empty)
+			                             .Replace(isRsaPrivateKey ? rsaFooter : pkcs8Footer, string.Empty)
+			                             .Replace("\r", string.Empty)
+			                             .Replace("\n", string.Empty)
+			                             .Trim();
+			byte[] keyBytes = Convert.FromBase64String(base64);
+
+			if (isRsaPrivateKey)
+			{
+				rsa.ImportRSAPrivateKey(keyBytes, out _);
+			}
+			else
+			{
+				rsa.ImportPkcs8PrivateKey(keyBytes, out _);
+			}
+#else
+			rsa.ImportFromPem(privateKeyPem);
+#endif
 		}
 	}
 }
