@@ -37,26 +37,10 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 _iniPath = Path.Combine(FindPackageRoot(), IniFileName);
             }
 
-            LoadIni();
+            _settings = BuilderIniSettings.Load(_iniPath, TargetName);
         }
 
         private void OnGUI()
-        {
-            using (new EditorGUILayout.VerticalScope())
-            {
-                DrawToolbar();
-
-                _scroll = EditorGUILayout.BeginScrollView(_scroll);
-                DrawGoogleSheetSection();
-                DrawCodeGenSection();
-                DrawJsonSection();
-                EditorGUILayout.EndScrollView();
-
-                DrawFooter();
-            }
-        }
-
-        private void DrawToolbar()
         {
             EditorGUILayout.Space(8);
             EditorGUILayout.LabelField("INI File", EditorStyles.boldLabel);
@@ -71,7 +55,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     if (string.IsNullOrWhiteSpace(selectedPath) == false)
                     {
                         _iniPath = selectedPath;
-                        LoadIni();
+                        _settings = BuilderIniSettings.Load(_iniPath, TargetName);
                     }
                 }
             }
@@ -80,7 +64,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
             {
                 if (GUILayout.Button("Reload"))
                 {
-                    LoadIni();
+                    _settings = BuilderIniSettings.Load(_iniPath, TargetName);
                 }
 
                 if (GUILayout.Button("Reveal"))
@@ -89,12 +73,10 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 }
             }
 
-            EditorGUILayout.Space(8);
-        }
+            _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
-        private void DrawGoogleSheetSection()
-        {
-            DrawSectionHeader("Google Sheet");
+            EditorGUILayout.Space(12);
+            EditorGUILayout.LabelField("Google Sheet", EditorStyles.boldLabel);
             _settings.GoogleSheet.AuthMode = (EAuthMode)EditorGUILayout.EnumPopup("Auth Mode", _settings.GoogleSheet.AuthMode);
             _settings.GoogleSheet.SpreadsheetId = EditorGUILayout.TextField("Spreadsheet ID", _settings.GoogleSheet.SpreadsheetId);
             DrawPathField("Service Account JSON", ref _settings.GoogleSheet.ServiceAccountJsonPath, false, "json");
@@ -102,12 +84,9 @@ namespace SheetSchemaBuilder.UnityEditorTools
             DrawPathField("Local TSV Directory", ref _settings.GoogleSheet.LocalDirectory, true, string.Empty);
             _settings.GoogleSheet.Sheets = EditorGUILayout.TextField("Sheets", _settings.GoogleSheet.Sheets);
             EditorGUILayout.HelpBox("Sheets is a comma-separated list. Leave it empty to fetch every sheet.", MessageType.None);
-            EditorGUILayout.Space(8);
-        }
 
-        private void DrawCodeGenSection()
-        {
-            DrawSectionHeader("Code Generation");
+            EditorGUILayout.Space(12);
+            EditorGUILayout.LabelField("Code Generation", EditorStyles.boldLabel);
             using (new EditorGUI.DisabledScope(true))
             {
                 EditorGUILayout.TextField("Target", TargetName);
@@ -117,18 +96,13 @@ namespace SheetSchemaBuilder.UnityEditorTools
             _settings.CodeGen.DatabaseClassName = EditorGUILayout.TextField("Database Class Name", _settings.CodeGen.DatabaseClassName);
             DrawPathField("Database Output Directory", ref _settings.CodeGen.DatabaseOutputDirectory, true, string.Empty);
             DrawPathField("Struct Output Directory", ref _settings.CodeGen.StructOutputDirectory, true, string.Empty);
-            EditorGUILayout.Space(8);
-        }
 
-        private void DrawJsonSection()
-        {
-            DrawSectionHeader("Json");
+            EditorGUILayout.Space(12);
+            EditorGUILayout.LabelField("Json", EditorStyles.boldLabel);
             DrawPathField("Output Path", ref _settings.Json.OutputPath, false, "json");
-            EditorGUILayout.Space(8);
-        }
 
-        private void DrawFooter()
-        {
+            EditorGUILayout.EndScrollView();
+
             EditorGUILayout.Space(4);
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -136,7 +110,9 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
                 if (GUILayout.Button("Save INI", GUILayout.Width(120), GUILayout.Height(28)))
                 {
-                    SaveIni();
+                    _settings.Save(_iniPath, TargetName);
+                    AssetDatabase.Refresh();
+                    ShowNotification(new GUIContent("Saved Sheet-Schema-Builder.ini"));
                 }
 
                 using (new EditorGUI.DisabledScope(_isRunning))
@@ -156,12 +132,6 @@ namespace SheetSchemaBuilder.UnityEditorTools
             EditorGUILayout.Space(8);
         }
 
-        private void DrawSectionHeader(string title)
-        {
-            EditorGUILayout.Space(4);
-            EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-        }
-
         private void DrawPathField(string label, ref string path, bool folder, string extension)
         {
             using (new EditorGUILayout.HorizontalScope())
@@ -170,7 +140,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
                 if (GUILayout.Button("...", GUILayout.Width(32)))
                 {
-                    string baseDirectory = Directory.Exists(Path.GetDirectoryName(_iniPath) ?? string.Empty) ? Path.GetDirectoryName(_iniPath) : Application.dataPath;
+                    string iniDirectory = Path.GetDirectoryName(_iniPath);
+                    string baseDirectory = Directory.Exists(iniDirectory) ? iniDirectory : Application.dataPath;
                     string selectedPath = folder ? EditorUtility.OpenFolderPanel(label, baseDirectory, string.Empty) : EditorUtility.OpenFilePanel(label, baseDirectory, extension);
 
                     if (string.IsNullOrWhiteSpace(selectedPath) == false)
@@ -179,20 +150,6 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     }
                 }
             }
-        }
-
-        private void LoadIni()
-        {
-            _settings = BuilderIniSettings.FromIni(_iniPath, TargetName);
-            Repaint();
-        }
-
-        private void SaveIni()
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_iniPath) ?? ".");
-            File.WriteAllText(_iniPath, _settings.ToIniText(TargetName), Encoding.UTF8);
-            AssetDatabase.Refresh();
-            ShowNotification(new GUIContent("Saved Sheet-Schema-Builder.ini"));
         }
 
         private async void RunBuilder(bool force)
@@ -214,7 +171,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
             try
             {
                 EditorUtility.DisplayProgressBar("Sheet Schema Builder", "Running builder...", 0.5f);
-                BuilderRunResult result = await Task.Run(() => ExecuteBuilder(dllPath, force));
+                BuilderRunResult result = await BuilderRunner.RunAsync(dllPath, _iniPath, force);
                 string log = result.StandardOutput + result.StandardError;
 
                 if (string.IsNullOrWhiteSpace(result.StandardOutput) == false)
@@ -263,47 +220,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
         {
             string iniDirectory = Path.GetDirectoryName(_iniPath) ?? string.Empty;
             string iniDirectoryDll = Path.Combine(iniDirectory, "Sheet-Schema-Builder.dll");
-            if (File.Exists(iniDirectoryDll))
-            {
-                return iniDirectoryDll;
-            }
-
-            return Path.Combine(FindPackageRoot(), "Sheet-Schema-Builder.dll");
-        }
-
-        private BuilderRunResult ExecuteBuilder(string dllPath, bool force)
-        {
-            string arguments = Quote(dllPath) + " " + Quote(_iniPath) + (force ? " --force" : string.Empty);
-            ProcessStartInfo startInfo = new ProcessStartInfo
-            {
-                FileName = "dotnet",
-                Arguments = arguments,
-                WorkingDirectory = Path.GetDirectoryName(_iniPath) ?? Directory.GetCurrentDirectory(),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-
-            using (Process process = Process.Start(startInfo))
-            {
-                if (process == null)
-                {
-                    throw new InvalidOperationException("Failed to start dotnet process.");
-                }
-
-                string standardOutput = process.StandardOutput.ReadToEnd();
-                string standardError = process.StandardError.ReadToEnd();
-                process.WaitForExit();
-                return new BuilderRunResult(process.ExitCode, standardOutput, standardError);
-            }
-        }
-
-        private static string Quote(string value)
-        {
-            return "\"" + value.Replace("\"", "\\\"") + "\"";
+            return File.Exists(iniDirectoryDll) ? iniDirectoryDll : Path.Combine(FindPackageRoot(), "Sheet-Schema-Builder.dll");
         }
 
         private static string FindPackageRoot()
@@ -332,7 +249,38 @@ namespace SheetSchemaBuilder.UnityEditorTools
             public CodeGenSettings CodeGen;
             public JsonSettings Json;
 
-            public static BuilderIniSettings CreateDefault(string target)
+            public static BuilderIniSettings Load(string path, string target)
+            {
+                BuilderIniSettings settings = CreateDefault(target);
+                if (File.Exists(path) == false)
+                {
+                    return settings;
+                }
+
+                Dictionary<string, Dictionary<string, string>> ini = IniFile.Read(path);
+                settings.GoogleSheet.AuthMode = IniFile.GetEnum(ini, "GoogleSheet", "AuthMode", settings.GoogleSheet.AuthMode);
+                settings.GoogleSheet.SpreadsheetId = IniFile.Get(ini, "GoogleSheet", "SpreadsheetId", settings.GoogleSheet.SpreadsheetId);
+                settings.GoogleSheet.ServiceAccountJsonPath = IniFile.Get(ini, "GoogleSheet", "ServiceAccountJsonPath", settings.GoogleSheet.ServiceAccountJsonPath);
+                settings.GoogleSheet.ApiKey = IniFile.Get(ini, "GoogleSheet", "ApiKey", settings.GoogleSheet.ApiKey);
+                settings.GoogleSheet.LocalDirectory = IniFile.Get(ini, "GoogleSheet", "LocalDirectory", settings.GoogleSheet.LocalDirectory);
+                settings.GoogleSheet.Sheets = IniFile.Get(ini, "GoogleSheet", "Sheets", settings.GoogleSheet.Sheets);
+                settings.CodeGen.Target = target;
+                settings.CodeGen.Namespace = IniFile.Get(ini, "CodeGen", "Namespace", settings.CodeGen.Namespace);
+                settings.CodeGen.DatabaseClassName = IniFile.Get(ini, "CodeGen", "DatabaseClassName", settings.CodeGen.DatabaseClassName);
+                settings.CodeGen.DatabaseOutputDirectory = IniFile.Get(ini, "CodeGen", "DatabaseOutputDirectory", settings.CodeGen.DatabaseOutputDirectory);
+                settings.CodeGen.StructOutputDirectory = IniFile.Get(ini, "CodeGen", "StructOutputDirectory", settings.CodeGen.StructOutputDirectory);
+                settings.Json.OutputPath = IniFile.Get(ini, "Json", "OutputPath", settings.Json.OutputPath);
+                return settings;
+            }
+
+            public void Save(string path, string target)
+            {
+                CodeGen.Target = target;
+                Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+                File.WriteAllText(path, ToIniText(), Encoding.UTF8);
+            }
+
+            private static BuilderIniSettings CreateDefault(string target)
             {
                 return new BuilderIniSettings
                 {
@@ -342,33 +290,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 };
             }
 
-            public static BuilderIniSettings FromIni(string path, string target)
+            private string ToIniText()
             {
-                BuilderIniSettings settings = CreateDefault(target);
-                if (File.Exists(path) == false)
-                {
-                    return settings;
-                }
-
-                Dictionary<string, Dictionary<string, string>> ini = ReadIni(path);
-                settings.GoogleSheet.AuthMode = ParseEnum(Get(ini, "GoogleSheet", "AuthMode", settings.GoogleSheet.AuthMode.ToString()), settings.GoogleSheet.AuthMode);
-                settings.GoogleSheet.SpreadsheetId = Get(ini, "GoogleSheet", "SpreadsheetId", settings.GoogleSheet.SpreadsheetId);
-                settings.GoogleSheet.ServiceAccountJsonPath = Get(ini, "GoogleSheet", "ServiceAccountJsonPath", settings.GoogleSheet.ServiceAccountJsonPath);
-                settings.GoogleSheet.ApiKey = Get(ini, "GoogleSheet", "ApiKey", settings.GoogleSheet.ApiKey);
-                settings.GoogleSheet.LocalDirectory = Get(ini, "GoogleSheet", "LocalDirectory", settings.GoogleSheet.LocalDirectory);
-                settings.GoogleSheet.Sheets = Get(ini, "GoogleSheet", "Sheets", settings.GoogleSheet.Sheets);
-                settings.CodeGen.Target = target;
-                settings.CodeGen.Namespace = Get(ini, "CodeGen", "Namespace", settings.CodeGen.Namespace);
-                settings.CodeGen.DatabaseClassName = Get(ini, "CodeGen", "DatabaseClassName", settings.CodeGen.DatabaseClassName);
-                settings.CodeGen.DatabaseOutputDirectory = Get(ini, "CodeGen", "DatabaseOutputDirectory", settings.CodeGen.DatabaseOutputDirectory);
-                settings.CodeGen.StructOutputDirectory = Get(ini, "CodeGen", "StructOutputDirectory", settings.CodeGen.StructOutputDirectory);
-                settings.Json.OutputPath = Get(ini, "Json", "OutputPath", settings.Json.OutputPath);
-                return settings;
-            }
-
-            public string ToIniText(string target)
-            {
-                CodeGen.Target = target;
                 return string.Join(Environment.NewLine, new[]
                 {
                     "[GoogleSheet]",
@@ -455,51 +378,96 @@ namespace SheetSchemaBuilder.UnityEditorTools
             }
         }
 
-        private static Dictionary<string, Dictionary<string, string>> ReadIni(string path)
+        private static class IniFile
         {
-            Dictionary<string, Dictionary<string, string>> sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-            string currentSection = string.Empty;
-
-            foreach (string rawLine in File.ReadAllLines(path))
+            public static Dictionary<string, Dictionary<string, string>> Read(string path)
             {
-                string line = rawLine.Trim();
-                if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal) || line.StartsWith(";", StringComparison.Ordinal))
+                Dictionary<string, Dictionary<string, string>> sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+                string currentSection = string.Empty;
+
+                foreach (string rawLine in File.ReadAllLines(path))
                 {
-                    continue;
+                    string line = rawLine.Trim();
+                    if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal) || line.StartsWith(";", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
+                    {
+                        currentSection = line.Substring(1, line.Length - 2).Trim();
+                        continue;
+                    }
+
+                    int separator = line.IndexOf('=');
+                    if (separator < 0)
+                    {
+                        continue;
+                    }
+
+                    if (sections.TryGetValue(currentSection, out Dictionary<string, string> values) == false)
+                    {
+                        values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        sections[currentSection] = values;
+                    }
+
+                    values[line.Substring(0, separator).Trim()] = line.Substring(separator + 1).Trim();
                 }
 
-                if (line.StartsWith("[", StringComparison.Ordinal) && line.EndsWith("]", StringComparison.Ordinal))
-                {
-                    currentSection = line.Substring(1, line.Length - 2).Trim();
-                    continue;
-                }
-
-                int separator = line.IndexOf('=');
-                if (separator < 0)
-                {
-                    continue;
-                }
-
-                if (sections.TryGetValue(currentSection, out Dictionary<string, string> values) == false)
-                {
-                    values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    sections[currentSection] = values;
-                }
-
-                values[line.Substring(0, separator).Trim()] = line.Substring(separator + 1).Trim();
+                return sections;
             }
 
-            return sections;
+            public static string Get(Dictionary<string, Dictionary<string, string>> ini, string section, string key, string defaultValue)
+            {
+                return ini.TryGetValue(section, out Dictionary<string, string> values) && values.TryGetValue(key, out string value) ? value : defaultValue;
+            }
+
+            public static T GetEnum<T>(Dictionary<string, Dictionary<string, string>> ini, string section, string key, T defaultValue) where T : struct
+            {
+                string value = Get(ini, section, key, defaultValue.ToString());
+                return Enum.TryParse(value, true, out T parsedValue) ? parsedValue : defaultValue;
+            }
         }
 
-        private static string Get(Dictionary<string, Dictionary<string, string>> ini, string section, string key, string defaultValue)
+        private static class BuilderRunner
         {
-            return ini.TryGetValue(section, out Dictionary<string, string> values) && values.TryGetValue(key, out string value) ? value : defaultValue;
-        }
+            public static Task<BuilderRunResult> RunAsync(string dllPath, string iniPath, bool force)
+            {
+                return Task.Run(() =>
+                {
+                    string arguments = Quote(dllPath) + " " + Quote(iniPath) + (force ? " --force" : string.Empty);
+                    ProcessStartInfo startInfo = new ProcessStartInfo
+                    {
+                        FileName = "dotnet",
+                        Arguments = arguments,
+                        WorkingDirectory = Path.GetDirectoryName(iniPath) ?? Directory.GetCurrentDirectory(),
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
 
-        private static T ParseEnum<T>(string value, T defaultValue) where T : struct
-        {
-            return Enum.TryParse(value, true, out T parsedValue) ? parsedValue : defaultValue;
+                    using (Process process = Process.Start(startInfo))
+                    {
+                        if (process == null)
+                        {
+                            throw new InvalidOperationException("Failed to start dotnet process.");
+                        }
+
+                        string standardOutput = process.StandardOutput.ReadToEnd();
+                        string standardError = process.StandardError.ReadToEnd();
+                        process.WaitForExit();
+                        return new BuilderRunResult(process.ExitCode, standardOutput, standardError);
+                    }
+                });
+            }
+
+            private static string Quote(string value)
+            {
+                return "\"" + value.Replace("\"", "\\\"") + "\"";
+            }
         }
 
         private readonly struct BuilderRunResult

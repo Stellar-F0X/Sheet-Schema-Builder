@@ -1,8 +1,8 @@
-import configparser
 import os
 import subprocess
 import sys
 import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
@@ -14,28 +14,128 @@ except ImportError:
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 INI_PATH = PLUGIN_ROOT / "Sheet-Schema-Builder.ini"
 DLL_PATH = PLUGIN_ROOT / "Sheet-Schema-Builder.dll"
+TARGET_NAME = "Unreal"
 
 
-DEFAULTS = {
-    "GoogleSheet": {
-        "AuthMode": "ServiceAccount",
-        "SpreadsheetId": "",
-        "ServiceAccountJsonPath": "./credentials/service-account.json",
-        "ApiKey": "",
-        "LocalDirectory": "",
-        "Sheets": "",
-    },
-    "CodeGen": {
-        "Target": "Unreal",
-        "Namespace": "BS.Data",
-        "DatabaseClassName": "SheetDataBase",
-        "DatabaseOutputDirectory": "./Generated/Database",
-        "StructOutputDirectory": "./Generated/Database/Structs",
-    },
-    "Json": {
-        "OutputPath": "./Generated/SheetDataBase.json",
-    },
-}
+@dataclass
+class GoogleSheetSettings:
+    auth_mode: str = "ServiceAccount"
+    spreadsheet_id: str = ""
+    service_account_json_path: str = "./credentials/service-account.json"
+    api_key: str = ""
+    local_directory: str = ""
+    sheets: str = ""
+
+
+@dataclass
+class CodeGenSettings:
+    target: str = TARGET_NAME
+    namespace: str = "BS.Data"
+    database_class_name: str = "SheetDataBase"
+    database_output_directory: str = "./Generated/Database"
+    struct_output_directory: str = "./Generated/Database/Structs"
+
+
+@dataclass
+class JsonSettings:
+    output_path: str = "./Generated/SheetDataBase.json"
+
+
+@dataclass
+class BuilderIniSettings:
+    google_sheet: GoogleSheetSettings = field(default_factory=GoogleSheetSettings)
+    code_gen: CodeGenSettings = field(default_factory=CodeGenSettings)
+    json: JsonSettings = field(default_factory=JsonSettings)
+
+    @classmethod
+    def load(cls, path):
+        settings = cls()
+        if not path.exists():
+            return settings
+
+        current_section = ""
+        for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or line.startswith(";"):
+                continue
+
+            if line.startswith("[") and line.endswith("]"):
+                current_section = line[1:-1].strip()
+                continue
+
+            key, separator, value = line.partition("=")
+            if separator:
+                settings.apply_value(current_section, key.strip(), value.strip())
+
+        settings.code_gen.target = TARGET_NAME
+        return settings
+
+    def save(self, path):
+        self.code_gen.target = TARGET_NAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.to_ini_text(), encoding="utf-8")
+
+    def apply_value(self, section, key, value):
+        if section == "GoogleSheet":
+            if key == "AuthMode":
+                self.google_sheet.auth_mode = value
+            elif key == "SpreadsheetId":
+                self.google_sheet.spreadsheet_id = value
+            elif key == "ServiceAccountJsonPath":
+                self.google_sheet.service_account_json_path = value
+            elif key == "ApiKey":
+                self.google_sheet.api_key = value
+            elif key == "LocalDirectory":
+                self.google_sheet.local_directory = value
+            elif key == "Sheets":
+                self.google_sheet.sheets = value
+        elif section == "CodeGen":
+            if key == "Namespace":
+                self.code_gen.namespace = value
+            elif key == "DatabaseClassName":
+                self.code_gen.database_class_name = value
+            elif key == "DatabaseOutputDirectory":
+                self.code_gen.database_output_directory = value
+            elif key == "StructOutputDirectory":
+                self.code_gen.struct_output_directory = value
+        elif section == "Json" and key == "OutputPath":
+            self.json.output_path = value
+
+    def to_ini_text(self):
+        return os.linesep.join([
+            "[GoogleSheet]",
+            "# ServiceAccount | ApiKey | Local",
+            f"AuthMode = {self.google_sheet.auth_mode}",
+            f"SpreadsheetId = {self.google_sheet.spreadsheet_id}",
+            f"ServiceAccountJsonPath = {self.google_sheet.service_account_json_path}",
+            f"ApiKey = {self.google_sheet.api_key}",
+            f"LocalDirectory = {self.google_sheet.local_directory}",
+            f"Sheets = {self.google_sheet.sheets}",
+            "",
+            "[CodeGen]",
+            "# Unity | Unreal",
+            f"Target = {self.code_gen.target}",
+            f"Namespace = {self.code_gen.namespace}",
+            f"DatabaseClassName = {self.code_gen.database_class_name}",
+            f"DatabaseOutputDirectory = {self.code_gen.database_output_directory}",
+            f"StructOutputDirectory = {self.code_gen.struct_output_directory}",
+            "",
+            "[Json]",
+            f"OutputPath = {self.json.output_path}",
+            "",
+        ])
+
+
+class BuilderRunner:
+    def __init__(self, dll_path):
+        self.dll_path = dll_path
+
+    def run(self, ini_path, force):
+        command = ["dotnet", str(self.dll_path), str(ini_path)]
+        if force:
+            command.append("--force")
+
+        return subprocess.run(command, cwd=str(ini_path.parent), capture_output=True, text=True, encoding="utf-8")
 
 
 def register_menu():
@@ -57,10 +157,7 @@ def register_menu():
     except Exception:
         pass
 
-    entry = unreal.ToolMenuEntry(
-        name="SheetSchemaBuilder.OpenSettings",
-        type=unreal.MultiBlockType.MENU_ENTRY,
-    )
+    entry = unreal.ToolMenuEntry(name="SheetSchemaBuilder.OpenSettings", type=unreal.MultiBlockType.MENU_ENTRY)
     entry.set_label("Sheet Schema Builder")
     entry.set_tool_tip("Edit Sheet-Schema-Builder.ini and run the builder DLL.")
     entry.set_string_command(unreal.ToolMenuStringCommandType.PYTHON, "", command)
@@ -73,59 +170,13 @@ def open_window():
         import tkinter as tk
         from tkinter import filedialog, messagebox, ttk
     except Exception as exception:
-        show_unreal_message("Sheet Schema Builder", f"Tkinter is not available in this Unreal Python environment.\n\n{exception}")
+        if unreal is not None:
+            unreal.EditorDialog.show_message("Sheet Schema Builder", f"Tkinter is not available in this Unreal Python environment.\n\n{exception}", unreal.AppMsgType.OK)
+        else:
+            print(f"Sheet Schema Builder: {exception}")
         return
 
     SheetSchemaBuilderWindow(tk, ttk, filedialog, messagebox).show()
-
-
-def show_unreal_message(title, message):
-    if unreal is not None:
-        unreal.EditorDialog.show_message(title, message, unreal.AppMsgType.OK)
-    else:
-        print(f"{title}: {message}")
-
-
-def read_ini(path):
-    config = configparser.ConfigParser()
-    config.optionxform = str
-    config.read_dict(DEFAULTS)
-
-    if path.exists():
-        config.read(path, encoding="utf-8-sig")
-
-    config["CodeGen"]["Target"] = "Unreal"
-    return config
-
-
-def write_ini(path, config):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    config["CodeGen"]["Target"] = "Unreal"
-
-    lines = [
-        "[GoogleSheet]",
-        "# ServiceAccount | ApiKey | Local",
-        f"AuthMode = {config['GoogleSheet'].get('AuthMode', 'ServiceAccount')}",
-        f"SpreadsheetId = {config['GoogleSheet'].get('SpreadsheetId', '')}",
-        f"ServiceAccountJsonPath = {config['GoogleSheet'].get('ServiceAccountJsonPath', './credentials/service-account.json')}",
-        f"ApiKey = {config['GoogleSheet'].get('ApiKey', '')}",
-        f"LocalDirectory = {config['GoogleSheet'].get('LocalDirectory', '')}",
-        f"Sheets = {config['GoogleSheet'].get('Sheets', '')}",
-        "",
-        "[CodeGen]",
-        "# Unity | Unreal",
-        "Target = Unreal",
-        f"Namespace = {config['CodeGen'].get('Namespace', 'BS.Data')}",
-        f"DatabaseClassName = {config['CodeGen'].get('DatabaseClassName', 'SheetDataBase')}",
-        f"DatabaseOutputDirectory = {config['CodeGen'].get('DatabaseOutputDirectory', './Generated/Database')}",
-        f"StructOutputDirectory = {config['CodeGen'].get('StructOutputDirectory', './Generated/Database/Structs')}",
-        "",
-        "[Json]",
-        f"OutputPath = {config['Json'].get('OutputPath', './Generated/SheetDataBase.json')}",
-        "",
-    ]
-
-    path.write_text(os.linesep.join(lines), encoding="utf-8")
 
 
 class SheetSchemaBuilderWindow:
@@ -135,8 +186,8 @@ class SheetSchemaBuilderWindow:
         self.filedialog = filedialog
         self.messagebox = messagebox
         self.ini_path = INI_PATH
-        self.dll_path = DLL_PATH
-        self.config = read_ini(self.ini_path)
+        self.settings = BuilderIniSettings.load(self.ini_path)
+        self.runner = BuilderRunner(DLL_PATH)
         self.vars = {}
         self.root = None
         self.output = None
@@ -150,31 +201,47 @@ class SheetSchemaBuilderWindow:
         self.root.title("Sheet Schema Builder")
         self.root.geometry("720x680")
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        self._build_ui()
+        self.build_ui()
         self.root.mainloop()
 
-    def _build_ui(self):
+    def build_ui(self):
         container = self.ttk.Frame(self.root, padding=12)
         container.pack(fill="both", expand=True)
 
-        self._path_row(container)
-        self._section(container, "Google Sheet")
-        self._combo_row(container, "GoogleSheet", "AuthMode", ["ServiceAccount", "ApiKey", "Local"])
-        self._entry_row(container, "GoogleSheet", "SpreadsheetId", "Spreadsheet ID")
-        self._entry_row(container, "GoogleSheet", "ServiceAccountJsonPath", "Service Account JSON", browse="file")
-        self._entry_row(container, "GoogleSheet", "ApiKey", "API Key")
-        self._entry_row(container, "GoogleSheet", "LocalDirectory", "Local TSV Directory", browse="directory")
-        self._entry_row(container, "GoogleSheet", "Sheets", "Sheets")
+        path_frame = self.ttk.Frame(container)
+        path_frame.pack(fill="x", pady=(0, 10))
+        self.ttk.Label(path_frame, text="INI File", width=22).pack(side="left")
+        self.ini_var = self.tk.StringVar(value=str(self.ini_path))
+        self.ttk.Entry(path_frame, textvariable=self.ini_var).pack(side="left", fill="x", expand=True)
+        self.ttk.Button(path_frame, text="...", width=3, command=self.browse_ini).pack(side="left", padx=(6, 0))
 
-        self._section(container, "Code Generation")
-        self._readonly_row(container, "Target", "Unreal")
-        self._entry_row(container, "CodeGen", "Namespace", "Namespace")
-        self._entry_row(container, "CodeGen", "DatabaseClassName", "Database Class Name")
-        self._entry_row(container, "CodeGen", "DatabaseOutputDirectory", "Database Output Directory", browse="directory")
-        self._entry_row(container, "CodeGen", "StructOutputDirectory", "Struct Output Directory", browse="directory")
+        self.add_section(container, "Google Sheet")
 
-        self._section(container, "Json")
-        self._entry_row(container, "Json", "OutputPath", "Output Path", browse="file")
+        auth_frame = self.ttk.Frame(container)
+        auth_frame.pack(fill="x", pady=2)
+        self.ttk.Label(auth_frame, text="Auth Mode", width=22).pack(side="left")
+        auth_var = self.tk.StringVar(value=self.settings.google_sheet.auth_mode)
+        self.vars[("google_sheet", "auth_mode")] = auth_var
+        self.ttk.Combobox(auth_frame, textvariable=auth_var, values=["ServiceAccount", "ApiKey", "Local"], state="readonly").pack(side="left", fill="x", expand=True)
+
+        self.add_entry_row(container, "google_sheet", "spreadsheet_id", "Spreadsheet ID")
+        self.add_entry_row(container, "google_sheet", "service_account_json_path", "Service Account JSON", browse="file")
+        self.add_entry_row(container, "google_sheet", "api_key", "API Key")
+        self.add_entry_row(container, "google_sheet", "local_directory", "Local TSV Directory", browse="directory")
+        self.add_entry_row(container, "google_sheet", "sheets", "Sheets")
+
+        self.add_section(container, "Code Generation")
+        target_frame = self.ttk.Frame(container)
+        target_frame.pack(fill="x", pady=2)
+        self.ttk.Label(target_frame, text="Target", width=22).pack(side="left")
+        self.ttk.Entry(target_frame, textvariable=self.tk.StringVar(value=TARGET_NAME), state="readonly").pack(side="left", fill="x", expand=True)
+        self.add_entry_row(container, "code_gen", "namespace", "Namespace")
+        self.add_entry_row(container, "code_gen", "database_class_name", "Database Class Name")
+        self.add_entry_row(container, "code_gen", "database_output_directory", "Database Output Directory", browse="directory")
+        self.add_entry_row(container, "code_gen", "struct_output_directory", "Struct Output Directory", browse="directory")
+
+        self.add_section(container, "Json")
+        self.add_entry_row(container, "json", "output_path", "Output Path", browse="file")
 
         button_frame = self.ttk.Frame(container)
         button_frame.pack(fill="x", pady=(12, 8))
@@ -186,42 +253,19 @@ class SheetSchemaBuilderWindow:
         self.output = self.tk.Text(container, height=8)
         self.output.pack(fill="both", expand=True)
 
-    def _path_row(self, parent):
-        frame = self.ttk.Frame(parent)
-        frame.pack(fill="x", pady=(0, 10))
-        self.ttk.Label(frame, text="INI File", width=22).pack(side="left")
-        self.ini_var = self.tk.StringVar(value=str(self.ini_path))
-        self.ttk.Entry(frame, textvariable=self.ini_var).pack(side="left", fill="x", expand=True)
-        self.ttk.Button(frame, text="...", width=3, command=self.browse_ini).pack(side="left", padx=(6, 0))
-
-    def _section(self, parent, title):
+    def add_section(self, parent, title):
         self.ttk.Label(parent, text=title, font=("TkDefaultFont", 10, "bold")).pack(anchor="w", pady=(10, 4))
 
-    def _entry_row(self, parent, section, key, label, browse=None):
+    def add_entry_row(self, parent, section_name, field_name, label, browse=None):
         frame = self.ttk.Frame(parent)
         frame.pack(fill="x", pady=2)
         self.ttk.Label(frame, text=label, width=22).pack(side="left")
-        var = self.tk.StringVar(value=self.config[section].get(key, DEFAULTS[section].get(key, "")))
-        self.vars[(section, key)] = var
+        var = self.tk.StringVar(value=getattr(getattr(self.settings, section_name), field_name))
+        self.vars[(section_name, field_name)] = var
         self.ttk.Entry(frame, textvariable=var).pack(side="left", fill="x", expand=True)
 
         if browse is not None:
             self.ttk.Button(frame, text="...", width=3, command=lambda: self.browse_path(var, browse)).pack(side="left", padx=(6, 0))
-
-    def _combo_row(self, parent, section, key, options):
-        frame = self.ttk.Frame(parent)
-        frame.pack(fill="x", pady=2)
-        self.ttk.Label(frame, text="Auth Mode", width=22).pack(side="left")
-        var = self.tk.StringVar(value=self.config[section].get(key, DEFAULTS[section].get(key, options[0])))
-        self.vars[(section, key)] = var
-        self.ttk.Combobox(frame, textvariable=var, values=options, state="readonly").pack(side="left", fill="x", expand=True)
-
-    def _readonly_row(self, parent, label, value):
-        frame = self.ttk.Frame(parent)
-        frame.pack(fill="x", pady=2)
-        self.ttk.Label(frame, text=label, width=22).pack(side="left")
-        readonly_var = self.tk.StringVar(value=value)
-        self.ttk.Entry(frame, textvariable=readonly_var, state="readonly").pack(side="left", fill="x", expand=True)
 
     def browse_ini(self):
         selected = self.filedialog.askopenfilename(initialdir=str(self.ini_path.parent), filetypes=[("INI", "*.ini"), ("All", "*.*")])
@@ -234,71 +278,59 @@ class SheetSchemaBuilderWindow:
         initial_dir = str(self.ini_path.parent)
         selected = self.filedialog.askdirectory(initialdir=initial_dir) if mode == "directory" else self.filedialog.askopenfilename(initialdir=initial_dir)
         if selected:
-            var.set(self._to_ini_relative_path(Path(selected)))
+            try:
+                var.set("./" + Path(selected).relative_to(self.ini_path.parent).as_posix())
+            except ValueError:
+                var.set(Path(selected).as_posix())
 
     def reload(self):
         self.ini_path = Path(self.ini_var.get())
-        self.config = read_ini(self.ini_path)
+        self.settings = BuilderIniSettings.load(self.ini_path)
 
-        for (section, key), var in self.vars.items():
-            var.set(self.config[section].get(key, DEFAULTS[section].get(key, "")))
+        for (section_name, field_name), var in self.vars.items():
+            var.set(getattr(getattr(self.settings, section_name), field_name))
 
     def save(self):
-        self._collect()
-        write_ini(self.ini_path, self.config)
+        self.ini_path = Path(self.ini_var.get())
+
+        for (section_name, field_name), var in self.vars.items():
+            setattr(getattr(self.settings, section_name), field_name, var.get())
+
+        self.settings.save(self.ini_path)
         self.messagebox.showinfo("Sheet Schema Builder", "Sheet-Schema-Builder.ini saved.")
 
     def run_builder(self, force):
-        self._collect()
-        write_ini(self.ini_path, self.config)
+        self.ini_path = Path(self.ini_var.get())
 
-        if not self.dll_path.exists():
-            self.messagebox.showerror("Sheet Schema Builder", f"Sheet-Schema-Builder.dll was not found:\n{self.dll_path}")
+        if not self.ini_path.exists():
+            self.messagebox.showerror("Sheet Schema Builder", f"INI file does not exist. Press Save INI before running.\n{self.ini_path}")
             return
 
-        self._append_output("Running Sheet Schema Builder...\n")
-        thread = threading.Thread(target=self._run_builder_thread, args=(force,), daemon=True)
-        thread.start()
+        if not self.runner.dll_path.exists():
+            self.messagebox.showerror("Sheet Schema Builder", f"Sheet-Schema-Builder.dll was not found:\n{self.runner.dll_path}")
+            return
 
-    def _run_builder_thread(self, force):
-        command = ["dotnet", str(self.dll_path), str(self.ini_path)]
-        if force:
-            command.append("--force")
+        self.output.insert("end", "Running Sheet Schema Builder...\n")
+        self.output.see("end")
 
-        try:
-            completed = subprocess.run(command, cwd=str(self.ini_path.parent), capture_output=True, text=True, encoding="utf-8")
-            output = completed.stdout + completed.stderr
-            self.root.after(0, lambda: self._builder_finished(completed.returncode, output))
-        except Exception as exception:
-            self.root.after(0, lambda: self._builder_finished(1, str(exception)))
+        def run_on_thread():
+            try:
+                completed = self.runner.run(self.ini_path, force)
+                output = completed.stdout + completed.stderr
+                self.root.after(0, lambda: self.finish_run(completed.returncode, output))
+            except Exception as exception:
+                self.root.after(0, lambda: self.finish_run(1, str(exception)))
 
-    def _builder_finished(self, exit_code, output):
-        self._append_output(output + "\n")
+        threading.Thread(target=run_on_thread, daemon=True).start()
+
+    def finish_run(self, exit_code, output):
+        self.output.insert("end", output + "\n")
+        self.output.see("end")
+
         if exit_code == 0:
             self.messagebox.showinfo("Sheet Schema Builder", "Completed.")
         else:
             self.messagebox.showerror("Sheet Schema Builder", f"Failed. ExitCode: {exit_code}")
-
-    def _append_output(self, text):
-        if self.output is not None:
-            self.output.insert("end", text)
-            self.output.see("end")
-
-    def _collect(self):
-        self.ini_path = Path(self.ini_var.get())
-        self.config = read_ini(self.ini_path)
-
-        for (section, key), var in self.vars.items():
-            self.config[section][key] = var.get()
-
-        self.config["CodeGen"]["Target"] = "Unreal"
-
-    def _to_ini_relative_path(self, selected_path):
-        try:
-            relative = selected_path.relative_to(self.ini_path.parent)
-            return "./" + relative.as_posix()
-        except ValueError:
-            return selected_path.as_posix()
 
 
 if __name__ == "__main__":
