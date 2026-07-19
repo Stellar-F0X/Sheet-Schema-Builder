@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace SheetSchemaBuilder.UnityEditorTools
 {
@@ -228,13 +229,16 @@ namespace SheetSchemaBuilder.UnityEditorTools
         private static string FindPackageRoot()
         {
             PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(SheetSchemaBuilderSettingsWindow).Assembly);
-            if (packageInfo != null && string.IsNullOrWhiteSpace(packageInfo.resolvedPath) == false)
+
+            if (packageInfo == null || string.IsNullOrWhiteSpace(packageInfo.resolvedPath))
+            {
+                string packagePath = Path.Combine(Directory.GetCurrentDirectory(), "Packages", PackageName);
+                return Directory.Exists(packagePath) ? packagePath : Path.Combine(Directory.GetCurrentDirectory(), "Package", TargetName);
+            }
+            else
             {
                 return packageInfo.resolvedPath;
             }
-
-            string packagePath = Path.Combine(Directory.GetCurrentDirectory(), "Packages", PackageName);
-            return Directory.Exists(packagePath) ? packagePath : Path.Combine(Directory.GetCurrentDirectory(), "Package", TargetName);
         }
 
         private enum EAuthMode
