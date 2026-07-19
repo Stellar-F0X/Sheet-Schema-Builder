@@ -51,7 +51,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
                 if (GUILayout.Button("Browse", GUILayout.Width(76)))
                 {
-                    string selectedPath = EditorUtility.OpenFilePanel("Select Sheet-Schema-Builder.ini", Path.GetDirectoryName(_iniPath), "ini");
+                    string selectedPath = EditorUtility.OpenFilePanel("Select Sheet-Schema-Builder.ini", GetIniBaseDirectory(), "ini");
                     if (string.IsNullOrWhiteSpace(selectedPath) == false)
                     {
                         _iniPath = selectedPath;
@@ -69,34 +69,35 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
                 if (GUILayout.Button("Reveal"))
                 {
-                    EditorUtility.RevealInFinder(_iniPath);
+                    RevealIniPath();
                 }
             }
 
-            _scroll = EditorGUILayout.BeginScrollView(_scroll);
+            using (EditorGUILayout.ScrollViewScope scrollView = new EditorGUILayout.ScrollViewScope(_scroll))
+            {
+                _scroll = scrollView.scrollPosition;
 
-            EditorGUILayout.Space(12);
-            EditorGUILayout.LabelField("Google Sheet", EditorStyles.boldLabel);
-            _settings.GoogleSheet.AuthMode = (EAuthMode)EditorGUILayout.EnumPopup("Auth Mode", _settings.GoogleSheet.AuthMode);
-            _settings.GoogleSheet.SpreadsheetId = EditorGUILayout.TextField("Spreadsheet ID", _settings.GoogleSheet.SpreadsheetId);
-            DrawPathField("Service Account JSON", ref _settings.GoogleSheet.ServiceAccountJsonPath, false, "json");
-            _settings.GoogleSheet.ApiKey = EditorGUILayout.TextField("API Key", _settings.GoogleSheet.ApiKey);
-            DrawPathField("Local TSV Directory", ref _settings.GoogleSheet.LocalDirectory, true, string.Empty);
-            _settings.GoogleSheet.Sheets = EditorGUILayout.TextField("Sheets", _settings.GoogleSheet.Sheets);
-            EditorGUILayout.HelpBox("Sheets is a comma-separated list. Leave it empty to fetch every sheet.", MessageType.None);
+                EditorGUILayout.Space(12);
+                EditorGUILayout.LabelField("Google Sheet", EditorStyles.boldLabel);
+                _settings.GoogleSheet.AuthMode = (EAuthMode)EditorGUILayout.EnumPopup("Auth Mode", _settings.GoogleSheet.AuthMode);
+                _settings.GoogleSheet.SpreadsheetId = EditorGUILayout.TextField("Spreadsheet ID", _settings.GoogleSheet.SpreadsheetId);
+                DrawPathField("Service Account JSON", ref _settings.GoogleSheet.ServiceAccountJsonPath, false, "json");
+                _settings.GoogleSheet.ApiKey = EditorGUILayout.TextField("API Key", _settings.GoogleSheet.ApiKey);
+                DrawPathField("Local TSV Directory", ref _settings.GoogleSheet.LocalDirectory, true, string.Empty);
+                _settings.GoogleSheet.Sheets = EditorGUILayout.TextField("Sheets", _settings.GoogleSheet.Sheets);
+                EditorGUILayout.HelpBox("Sheets is a comma-separated list. Leave it empty to fetch every sheet.", MessageType.None);
 
-            EditorGUILayout.Space(12);
-            EditorGUILayout.LabelField("Code Generation", EditorStyles.boldLabel);
-            _settings.CodeGen.Namespace = EditorGUILayout.TextField("Namespace", _settings.CodeGen.Namespace);
-            _settings.CodeGen.DatabaseClassName = EditorGUILayout.TextField("Database Class Name", _settings.CodeGen.DatabaseClassName);
-            DrawPathField("Database Output Directory", ref _settings.CodeGen.DatabaseOutputDirectory, true, string.Empty);
-            DrawPathField("Struct Output Directory", ref _settings.CodeGen.StructOutputDirectory, true, string.Empty);
+                EditorGUILayout.Space(12);
+                EditorGUILayout.LabelField("Code Generation", EditorStyles.boldLabel);
+                _settings.CodeGen.Namespace = EditorGUILayout.TextField("Namespace", _settings.CodeGen.Namespace);
+                _settings.CodeGen.DatabaseClassName = EditorGUILayout.TextField("Database Class Name", _settings.CodeGen.DatabaseClassName);
+                DrawPathField("Database Output Directory", ref _settings.CodeGen.DatabaseOutputDirectory, true, string.Empty);
+                DrawPathField("Struct Output Directory", ref _settings.CodeGen.StructOutputDirectory, true, string.Empty);
 
-            EditorGUILayout.Space(12);
-            EditorGUILayout.LabelField("Json", EditorStyles.boldLabel);
-            DrawPathField("Output Path", ref _settings.Json.OutputPath, false, "json");
-
-            EditorGUILayout.EndScrollView();
+                EditorGUILayout.Space(12);
+                EditorGUILayout.LabelField("Json", EditorStyles.boldLabel);
+                DrawPathField("Output Path", ref _settings.Json.OutputPath, false, "json");
+            }
 
             EditorGUILayout.Space(4);
             using (new EditorGUILayout.HorizontalScope())
@@ -144,6 +145,38 @@ namespace SheetSchemaBuilder.UnityEditorTools
                         path = ToIniRelativePath(selectedPath);
                     }
                 }
+            }
+        }
+
+        private void RevealIniPath()
+        {
+            string iniPath = _iniPath;
+            EditorApplication.delayCall += () => RevealIniPathDelayed(iniPath);
+        }
+
+        private static void RevealIniPathDelayed(string iniPath)
+        {
+            if (string.IsNullOrWhiteSpace(iniPath))
+            {
+                EditorUtility.DisplayDialog("Sheet Schema Builder", "INI path is empty.", "OK");
+                return;
+            }
+
+            try
+            {
+                string absolutePath = Path.GetFullPath(iniPath);
+                if (File.Exists(absolutePath) == false)
+                {
+                    EditorUtility.DisplayDialog("Sheet Schema Builder", "INI file does not exist. Press Save INI before revealing.\n\n" + absolutePath, "OK");
+                    return;
+                }
+
+                EditorUtility.RevealInFinder(absolutePath);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+                EditorUtility.DisplayDialog("Sheet Schema Builder", "Failed to reveal INI file.\n\n" + exception.Message, "OK");
             }
         }
 
@@ -224,6 +257,12 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
             string relativePath = Path.GetRelativePath(iniDirectory, selectedPath).Replace('\\', '/');
             return relativePath.StartsWith("..", StringComparison.Ordinal) ? selectedPath.Replace('\\', '/') : "./" + relativePath;
+        }
+
+        private string GetIniBaseDirectory()
+        {
+            string iniDirectory = string.IsNullOrWhiteSpace(_iniPath) ? string.Empty : Path.GetDirectoryName(_iniPath);
+            return Directory.Exists(iniDirectory) ? iniDirectory : Application.dataPath;
         }
 
         private static string FindPackageRoot()
