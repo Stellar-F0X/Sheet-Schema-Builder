@@ -9,7 +9,7 @@ on:
       - Source/**
       - Source.Native/**
       - Package/Unity/**
-      - Package/Unreal/**
+      - Package/Unreal/SheetSchemaBuilder/**
   workflow_dispatch:
 
 permissions:
@@ -85,7 +85,7 @@ jobs:
       - name: Verify Unreal native artifacts
         shell: pwsh
         run: |
-          $nativeDir = "Package/Unreal/Binaries/ThirdParty/SheetSchemaBuilder/${{ matrix.unreal-platform }}"
+          $nativeDir = "Package/Unreal/SheetSchemaBuilder/Binaries/ThirdParty/SheetSchemaBuilder/${{ matrix.unreal-platform }}"
           if (-not (Test-Path $nativeDir)) {
             throw "Missing native artifact directory: $nativeDir"
           }
@@ -96,10 +96,10 @@ jobs:
           }
 
           $removedManagedFiles = @(
-            "Package/Unreal/Sheet-Schema-Builder.dll",
-            "Package/Unreal/Sheet-Schema-Builder.pdb",
-            "Package/Unreal/Sheet-Schema-Builder.deps.json",
-            "Package/Unreal/Sheet-Schema-Builder.runtimeconfig.json"
+            "Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.dll",
+            "Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.pdb",
+            "Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.deps.json",
+            "Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.runtimeconfig.json"
           )
 
           foreach ($file in $removedManagedFiles) {
@@ -112,5 +112,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SheetSchemaBuilder-Unreal-Package-${{ matrix.unreal-platform }}
-          path: Package/Unreal
+          path: Package/Unreal/SheetSchemaBuilder
           if-no-files-found: error

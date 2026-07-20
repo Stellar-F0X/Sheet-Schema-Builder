@@ -18,7 +18,7 @@
 
     <ItemGroup>
         <EmbeddedResource Include="../Package/Unity/*.txt" LogicalName="Unity.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="../Package/Unreal/*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="../Package/Unreal/SheetSchemaBuilder/*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
@@ -36,7 +36,7 @@
         <MakeDir Directories="$(MSBuildProjectDirectory)\..\Package\Unity" Condition="'@(UnityPackageOutputFiles)' != ''" />
         <Delete Files="$(MSBuildProjectDirectory)\..\Package\Unity\$(TargetName).deps.json;$(MSBuildProjectDirectory)\..\Package\Unity\$(TargetName).runtimeconfig.json" Condition="'@(UnityPackageOutputFiles)' != ''" TreatErrorsAsWarnings="true" />
         <Copy SourceFiles="@(UnityPackageOutputFiles)" DestinationFolder="$(MSBuildProjectDirectory)\..\Package\Unity\" SkipUnchangedFiles="true" Condition="'@(UnityPackageOutputFiles)' != ''" />
-        <Delete Files="$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).dll;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).pdb;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).deps.json;$(MSBuildProjectDirectory)\..\Package\Unreal\$(TargetName).runtimeconfig.json" Condition="'$(TargetFramework)' == 'net10.0'" TreatErrorsAsWarnings="true" />
+        <Delete Files="$(MSBuildProjectDirectory)\..\Package\Unreal\SheetSchemaBuilder\$(TargetName).dll;$(MSBuildProjectDirectory)\..\Package\Unreal\SheetSchemaBuilder\$(TargetName).pdb;$(MSBuildProjectDirectory)\..\Package\Unreal\SheetSchemaBuilder\$(TargetName).deps.json;$(MSBuildProjectDirectory)\..\Package\Unreal\SheetSchemaBuilder\$(TargetName).runtimeconfig.json" Condition="'$(TargetFramework)' == 'net10.0'" TreatErrorsAsWarnings="true" />
     </Target>
 
 </Project>

@@ -8,6 +8,7 @@ namespace DataBuilder.CodeGen
     public sealed class CodeTemplate
     {
         private const string _PACKAGE_RELATIVE_DIRECTORY = "Package";
+        private const string _UNREAL_PLUGIN_DIRECTORY = "SheetSchemaBuilder";
         private const string _LEGACY_TEMPLATE_RELATIVE_DIRECTORY = "Templates";
         private const string _DEFAULT_TEMPLATE_FILE_NAME = "UnityCodeTemplates.txt";
         private const string _TEMPLATE_START_PREFIX = "# TEMPLATE ";
@@ -196,6 +197,12 @@ namespace DataBuilder.CodeGen
         {
             if (string.IsNullOrWhiteSpace(templateEngineDirectory) == false)
             {
+                if (templateEngineDirectory.Equals("Unreal", StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return Path.Combine(baseDirectory, _PACKAGE_RELATIVE_DIRECTORY, templateEngineDirectory, _UNREAL_PLUGIN_DIRECTORY, templateName);
+                    yield return Path.Combine(baseDirectory, templateEngineDirectory, _UNREAL_PLUGIN_DIRECTORY, templateName);
+                }
+
                 yield return Path.Combine(baseDirectory, _PACKAGE_RELATIVE_DIRECTORY, templateEngineDirectory, templateName);
                 yield return Path.Combine(baseDirectory, templateEngineDirectory, templateName);
             }

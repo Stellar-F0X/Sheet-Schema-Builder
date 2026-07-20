@@ -17,7 +17,7 @@
     <ItemGroup>
         <Compile Include="..\Source\**\*.cs" Exclude="..\Source\Program.cs;..\Source\Compatibility\CSharpFeaturePolyfills.cs;..\Source\bin\**\*.cs;..\Source\obj\**\*.cs" LinkBase="Core" />
         <EmbeddedResource Include="..\Package\Unity\*.txt" LogicalName="Unity.%(Filename)%(Extension)" />
-        <EmbeddedResource Include="..\Package\Unreal\*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
+        <EmbeddedResource Include="..\Package\Unreal\SheetSchemaBuilder\*.txt" LogicalName="Unreal.%(Filename)%(Extension)" />
     </ItemGroup>
 
     <Target Name="CopyNativeAotOutputToUnrealPackage" AfterTargets="Publish">
@@ -26,7 +26,7 @@
             <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'linux-x64'">Linux</UnrealNativePlatformDirectory>
             <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">Mac</UnrealNativePlatformDirectory>
             <UnrealNativePlatformDirectory Condition="'$(RuntimeIdentifier)' == 'osx-x64'">Mac</UnrealNativePlatformDirectory>
-            <UnrealNativeOutputDirectory>$(MSBuildProjectDirectory)\..\Package\Unreal\Binaries\ThirdParty\SheetSchemaBuilder\$(UnrealNativePlatformDirectory)</UnrealNativeOutputDirectory>
+            <UnrealNativeOutputDirectory>$(MSBuildProjectDirectory)\..\Package\Unreal\SheetSchemaBuilder\Binaries\ThirdParty\SheetSchemaBuilder\$(UnrealNativePlatformDirectory)</UnrealNativeOutputDirectory>
         </PropertyGroup>
 
         <Error Text="RuntimeIdentifier is required. Publish with -r win-x64, -r linux-x64, -r osx-arm64, or -r osx-x64." Condition="'$(RuntimeIdentifier)' == ''" />
