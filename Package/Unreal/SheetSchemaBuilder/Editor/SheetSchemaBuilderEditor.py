@@ -13,6 +13,20 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 INI_PATH = PLUGIN_ROOT / "Sheet-Schema-Builder.ini"
 TARGET_NAME = "Unreal"
 
+_ACTIVE_WINDOW = None
+
+_DARK_THEME = {
+    "background": "#202020",
+    "surface": "#2b2b2b",
+    "input": "#303030",
+    "foreground": "#f0f0f0",
+    "muted_foreground": "#bdbdbd",
+    "border": "#4a4a4a",
+    "accent": "#3d7eff",
+    "accent_active": "#5a92ff",
+    "selection": "#264f78",
+}
+
 
 @dataclass
 class GoogleSheetSettings:
@@ -173,6 +187,12 @@ def register_menu():
 
 
 def open_window():
+    global _ACTIVE_WINDOW
+
+    if _ACTIVE_WINDOW is not None and _ACTIVE_WINDOW.is_open():
+        _ACTIVE_WINDOW.focus()
+        return
+
     try:
         import tkinter as tk
         from tkinter import filedialog, messagebox, ttk
@@ -183,7 +203,8 @@ def open_window():
             print(f"Sheet Schema Builder: {exception}")
         return
 
-    SheetSchemaBuilderWindow(tk, ttk, filedialog, messagebox).show()
+    _ACTIVE_WINDOW = SheetSchemaBuilderWindow(tk, ttk, filedialog, messagebox)
+    _ACTIVE_WINDOW.show()
 
 
 class SheetSchemaBuilderWindow:
@@ -198,18 +219,125 @@ class SheetSchemaBuilderWindow:
         self.vars = {}
         self.root = None
         self.output = None
+        self.style = None
+        self.slate_tick_handle = None
 
     def show(self):
-        if self.root is not None:
-            self.root.lift()
+        if self.is_open():
+            self.focus()
             return
 
         self.root = self.tk.Tk()
         self.root.title("Sheet Schema Builder")
         self.root.geometry("720x680")
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.apply_dark_theme()
+        self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.build_ui()
-        self.root.mainloop()
+
+        if unreal is not None and hasattr(unreal, "register_slate_post_tick_callback"):
+            self.slate_tick_handle = unreal.register_slate_post_tick_callback(self.process_tk_events)
+        else:
+            self.root.mainloop()
+
+    def is_open(self):
+        if self.root is None:
+            return False
+
+        try:
+            return bool(self.root.winfo_exists())
+        except self.tk.TclError:
+            return False
+
+    def focus(self):
+        if not self.is_open():
+            return
+
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def apply_dark_theme(self):
+        self.root.configure(background=_DARK_THEME["background"])
+        self.root.option_add("*TCombobox*Listbox.background", _DARK_THEME["input"])
+        self.root.option_add("*TCombobox*Listbox.foreground", _DARK_THEME["foreground"])
+        self.root.option_add("*TCombobox*Listbox.selectBackground", _DARK_THEME["selection"])
+        self.root.option_add("*TCombobox*Listbox.selectForeground", _DARK_THEME["foreground"])
+
+        self.style = self.ttk.Style(self.root)
+        try:
+            self.style.theme_use("clam")
+        except self.tk.TclError:
+            pass
+
+        self.style.configure(".", background=_DARK_THEME["surface"], foreground=_DARK_THEME["foreground"])
+        self.style.configure("TFrame", background=_DARK_THEME["background"])
+        self.style.configure("TLabel", background=_DARK_THEME["background"], foreground=_DARK_THEME["foreground"])
+        self.style.configure(
+            "TButton",
+            background=_DARK_THEME["surface"],
+            foreground=_DARK_THEME["foreground"],
+            bordercolor=_DARK_THEME["border"],
+            lightcolor=_DARK_THEME["border"],
+            darkcolor=_DARK_THEME["border"],
+            padding=(8, 4),
+        )
+        self.style.map(
+            "TButton",
+            background=[("active", _DARK_THEME["accent"]), ("pressed", _DARK_THEME["accent_active"])],
+            foreground=[("disabled", _DARK_THEME["muted_foreground"])],
+        )
+        self.style.configure(
+            "TEntry",
+            fieldbackground=_DARK_THEME["input"],
+            foreground=_DARK_THEME["foreground"],
+            bordercolor=_DARK_THEME["border"],
+            insertcolor=_DARK_THEME["foreground"],
+        )
+        self.style.configure(
+            "TCombobox",
+            fieldbackground=_DARK_THEME["input"],
+            background=_DARK_THEME["input"],
+            foreground=_DARK_THEME["foreground"],
+            arrowcolor=_DARK_THEME["foreground"],
+            bordercolor=_DARK_THEME["border"],
+        )
+        self.style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", _DARK_THEME["input"])],
+            foreground=[("readonly", _DARK_THEME["foreground"])],
+        )
+
+    def process_tk_events(self, *_args):
+        if not self.is_open():
+            self.close()
+            return
+
+        try:
+            self.root.update()
+        except self.tk.TclError:
+            self.close()
+
+    def close(self):
+        global _ACTIVE_WINDOW
+
+        if self.slate_tick_handle is not None and unreal is not None:
+            unregister = getattr(unreal, "unregister_slate_post_tick_callback", None)
+            if unregister is not None:
+                try:
+                    unregister(self.slate_tick_handle)
+                except Exception:
+                    pass
+            self.slate_tick_handle = None
+
+        if self.root is not None:
+            try:
+                self.root.destroy()
+            except self.tk.TclError:
+                pass
+            self.root = None
+
+        if _ACTIVE_WINDOW is self:
+            _ACTIVE_WINDOW = None
 
     def build_ui(self):
         container = self.ttk.Frame(self.root, padding=12)
@@ -253,7 +381,17 @@ class SheetSchemaBuilderWindow:
         self.ttk.Button(button_frame, text="Run", command=lambda: self.run_builder(False)).pack(side="right")
         self.ttk.Button(button_frame, text="Run Force", command=lambda: self.run_builder(True)).pack(side="right", padx=6)
 
-        self.output = self.tk.Text(container, height=8)
+        self.output = self.tk.Text(
+            container,
+            height=8,
+            background=_DARK_THEME["input"],
+            foreground=_DARK_THEME["foreground"],
+            insertbackground=_DARK_THEME["foreground"],
+            selectbackground=_DARK_THEME["selection"],
+            selectforeground=_DARK_THEME["foreground"],
+            relief="flat",
+            borderwidth=1,
+        )
         self.output.pack(fill="both", expand=True)
 
     def add_section(self, parent, title):
