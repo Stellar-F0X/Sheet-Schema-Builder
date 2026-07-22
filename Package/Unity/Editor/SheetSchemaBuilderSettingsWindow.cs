@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -11,10 +12,86 @@ using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace SheetSchemaBuilder.UnityEditorTools
 {
+    [InitializeOnLoad]
+    internal static class SheetSchemaBuilderProjectSettings
+    {
+        internal const string PackageName = "com.sheet-schema-builder.tool";
+        internal const string IniFileName = "Sheet-Schema-Builder.ini";
+
+        static SheetSchemaBuilderProjectSettings()
+        {
+            Events.registeredPackages += OnRegisteredPackages;
+            EditorApplication.delayCall += EnsureIniExists;
+        }
+
+        internal static string ProjectRoot
+        {
+            get
+            {
+                DirectoryInfo projectDirectory = Directory.GetParent(Application.dataPath);
+                return projectDirectory == null ? Directory.GetCurrentDirectory() : projectDirectory.FullName;
+            }
+        }
+
+        internal static string IniPath
+        {
+            get { return Path.Combine(ProjectRoot, "ProjectSettings", IniFileName); }
+        }
+
+        internal static void EnsureIniExists()
+        {
+            if (File.Exists(IniPath))
+            {
+                return;
+            }
+
+            try
+            {
+                string sourcePath = Path.Combine(FindPackageRoot(), IniFileName);
+                if (File.Exists(sourcePath) == false)
+                {
+                    Debug.LogError("Sheet Schema Builder default INI file was not found: " + sourcePath);
+                    return;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(IniPath) ?? ProjectRoot);
+                File.Copy(sourcePath, IniPath, overwrite: false);
+                Debug.Log("Sheet Schema Builder settings created: " + IniPath);
+            }
+            catch (IOException) when (File.Exists(IniPath))
+            {
+                // Another initialization callback created the file first.
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception);
+            }
+        }
+
+        internal static string FindPackageRoot()
+        {
+            PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(SheetSchemaBuilderSettingsWindow).Assembly);
+
+            if (packageInfo == null || string.IsNullOrWhiteSpace(packageInfo.resolvedPath))
+            {
+                string packagePath = Path.Combine(Directory.GetCurrentDirectory(), "Packages", PackageName);
+                return Directory.Exists(packagePath) ? packagePath : Path.Combine(Directory.GetCurrentDirectory(), "Package", "Unity");
+            }
+
+            return packageInfo.resolvedPath;
+        }
+
+        private static void OnRegisteredPackages(PackageRegistrationEventArgs args)
+        {
+            if (args.added.Any(package => package.name == PackageName) || args.changedTo.Any(package => package.name == PackageName))
+            {
+                EnsureIniExists();
+            }
+        }
+    }
+
     public sealed class SheetSchemaBuilderSettingsWindow : EditorWindow
     {
-        private const string PackageName = "com.sheet-schema-builder.tool";
-        private const string IniFileName = "Sheet-Schema-Builder.ini";
         private const string TargetName = "Unity";
 
         private Vector2 _scroll;
@@ -34,7 +111,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
         {
             if (string.IsNullOrWhiteSpace(_iniPath))
             {
-                _iniPath = Path.Combine(FindPackageRoot(), IniFileName);
+                SheetSchemaBuilderProjectSettings.EnsureIniExists();
+                _iniPath = SheetSchemaBuilderProjectSettings.IniPath;
             }
 
             _settings = BuilderIniSettings.Load(_iniPath, TargetName);
@@ -153,8 +231,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
                 if (GUILayout.Button("...", GUILayout.Width(32)))
                 {
-                    string iniDirectory = Path.GetDirectoryName(_iniPath);
-                    string baseDirectory = Directory.Exists(iniDirectory) ? iniDirectory : Application.dataPath;
+                    string baseDirectory = SheetSchemaBuilderProjectSettings.ProjectRoot;
                     string selectedPath = folder ? EditorUtility.OpenFolderPanel(label, baseDirectory, string.Empty) : EditorUtility.OpenFilePanel(label, baseDirectory, extension);
 
                     if (string.IsNullOrWhiteSpace(selectedPath) == false)
@@ -221,8 +298,21 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     Console.SetError(error);
                     try
                     {
-                        string[] args = force ? new[] { _iniPath, "--target", TargetName, "--force" } : new[] { _iniPath, "--target", TargetName };
-                        exitCode = await Task.Run(() => DataBuilder.SheetSchemaBuilder.Process(args));
+                        List<string> args = new List<string>
+                        {
+                            _iniPath,
+                            "--target",
+                            TargetName,
+                            "--base-directory",
+                            SheetSchemaBuilderProjectSettings.ProjectRoot
+                        };
+
+                        if (force)
+                        {
+                            args.Add("--force");
+                        }
+
+                        exitCode = await Task.Run(() => DataBuilder.SheetSchemaBuilder.Process(args.ToArray()));
                     }
                     finally
                     {
@@ -266,13 +356,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
         private string ToIniRelativePath(string selectedPath)
         {
-            string iniDirectory = Path.GetDirectoryName(_iniPath);
-            if (string.IsNullOrWhiteSpace(iniDirectory))
-            {
-                return selectedPath.Replace('\\', '/');
-            }
-
-            string relativePath = Path.GetRelativePath(iniDirectory, selectedPath).Replace('\\', '/');
+            string relativePath = Path.GetRelativePath(SheetSchemaBuilderProjectSettings.ProjectRoot, selectedPath).Replace('\\', '/');
             return relativePath.StartsWith("..", StringComparison.Ordinal) ? selectedPath.Replace('\\', '/') : "./" + relativePath;
         }
 
@@ -280,21 +364,6 @@ namespace SheetSchemaBuilder.UnityEditorTools
         {
             string iniDirectory = string.IsNullOrWhiteSpace(_iniPath) ? string.Empty : Path.GetDirectoryName(_iniPath);
             return Directory.Exists(iniDirectory) ? iniDirectory : Application.dataPath;
-        }
-
-        private static string FindPackageRoot()
-        {
-            PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(SheetSchemaBuilderSettingsWindow).Assembly);
-
-            if (packageInfo == null || string.IsNullOrWhiteSpace(packageInfo.resolvedPath))
-            {
-                string packagePath = Path.Combine(Directory.GetCurrentDirectory(), "Packages", PackageName);
-                return Directory.Exists(packagePath) ? packagePath : Path.Combine(Directory.GetCurrentDirectory(), "Package", TargetName);
-            }
-            else
-            {
-                return packageInfo.resolvedPath;
-            }
         }
 
         private enum EAuthMode

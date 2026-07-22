@@ -20,7 +20,7 @@ namespace DataBuilder.Configuration
 		Unreal,
 	}
 
-	/// <summary>.ini에서 읽어들인 빌드 설정. 상대 경로는 .ini 파일 위치 기준으로 해석된다.</summary>
+	/// <summary>.ini에서 읽어들인 빌드 설정. 상대 경로는 기본적으로 .ini 파일 위치 기준으로 해석된다.</summary>
 	public sealed class BuilderConfig
 	{
 		public required EAuthMode AuthMode
@@ -101,10 +101,11 @@ namespace DataBuilder.Configuration
 
 
 		/// <summary>ini 파일에서 빌드 설정을 로드한다.</summary>
-		public static BuilderConfig Load(string iniPath, ECodeGenTarget? targetOverride = null)
+		public static BuilderConfig Load(string iniPath, ECodeGenTarget? targetOverride = null, string? baseDirectoryOverride = null)
 		{
 			IniFile ini = IniFile.Load(iniPath);
-			string baseDir = Path.GetDirectoryName(Path.GetFullPath(iniPath))!;
+			string iniDirectory = Path.GetDirectoryName(Path.GetFullPath(iniPath))!;
+			string baseDir = string.IsNullOrWhiteSpace(baseDirectoryOverride) ? iniDirectory : Path.GetFullPath(baseDirectoryOverride);
 			string authModeText = ini.Get("GoogleSheet", "AuthMode", "ServiceAccount");
 
 			if (Enum.TryParse(authModeText, ignoreCase: true, out EAuthMode authMode) == false)

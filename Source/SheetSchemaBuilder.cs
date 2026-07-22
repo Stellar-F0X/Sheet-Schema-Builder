@@ -14,6 +14,7 @@ namespace DataBuilder
 	///
 	/// 사용법: DataBuilder [ini경로] [--force]
 	/// ini경로  : 설정 파일 경로 (기본값: 실행 디렉터리의 Sheet-Schema-Builder.ini)
+	/// --base-directory 경로 : ini에 적힌 상대 경로의 기준 디렉터리를 재정의한다.
 	/// --force  : 해시가 같아도 모든 코드를 다시 생성한다.
 	/// </summary> 
 	public static class SheetSchemaBuilder
@@ -47,6 +48,7 @@ namespace DataBuilder
 		{
 			bool force = false;
 			string iniPath = "Sheet-Schema-Builder.ini";
+			string? baseDirectoryOverride = null;
 			ECodeGenTarget? targetOverride = null;
 			for (int i = 0; i < args.Length; i++)
 			{
@@ -64,6 +66,15 @@ namespace DataBuilder
 
 					targetOverride = parsedTarget;
 				}
+				else if (arg.Equals("--base-directory", StringComparison.OrdinalIgnoreCase))
+				{
+					if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+					{
+						throw new SheetSchemaBuilderException("--base-directory 경로가 필요합니다.");
+					}
+
+					baseDirectoryOverride = args[i];
+				}
 				else if (arg.StartsWith("--", StringComparison.Ordinal))
 				{
 					throw new SheetSchemaBuilderException($"지원하지 않는 옵션입니다: {arg}");
@@ -74,7 +85,7 @@ namespace DataBuilder
 				}
 			}
 
-			BuilderConfig config = BuilderConfig.Load(iniPath, targetOverride);
+			BuilderConfig config = BuilderConfig.Load(iniPath, targetOverride, baseDirectoryOverride);
 			Console.WriteLine($"설정 로드: {Path.GetFullPath(iniPath)} (AuthMode: {config.AuthMode}, CodeGenTarget: {config.CodeGenTarget})");
 
 			// 1. 시트 데이터를 가져온다.
