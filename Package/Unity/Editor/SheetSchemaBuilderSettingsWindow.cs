@@ -38,6 +38,18 @@ namespace SheetSchemaBuilder.UnityEditorTools
             get { return Path.Combine(ProjectRoot, "ProjectSettings", IniFileName); }
         }
 
+        internal static bool IsPackageCachePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            string packageCacheRoot = Path.GetFullPath(Path.Combine(ProjectRoot, "Library", "PackageCache")) + Path.DirectorySeparatorChar;
+            string fullPath = Path.GetFullPath(path);
+            return fullPath.StartsWith(packageCacheRoot, StringComparison.OrdinalIgnoreCase);
+        }
+
         internal static void EnsureIniExists()
         {
             if (File.Exists(IniPath))
@@ -109,7 +121,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
         private void OnEnable()
         {
-            if (string.IsNullOrWhiteSpace(_iniPath))
+            if (string.IsNullOrWhiteSpace(_iniPath) || SheetSchemaBuilderProjectSettings.IsPackageCachePath(_iniPath))
             {
                 SheetSchemaBuilderProjectSettings.EnsureIniExists();
                 _iniPath = SheetSchemaBuilderProjectSettings.IniPath;

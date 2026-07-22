@@ -143,30 +143,160 @@ namespace DataBuilder.Sheets
 
 		private static void ImportPrivateKey(RSA rsa, string privateKeyPem)
 		{
-#if NETSTANDARD2_1
 			const string pkcs8Header = "-----BEGIN PRIVATE KEY-----";
 			const string pkcs8Footer = "-----END PRIVATE KEY-----";
 			const string rsaHeader = "-----BEGIN RSA PRIVATE KEY-----";
 			const string rsaFooter = "-----END RSA PRIVATE KEY-----";
 			bool isRsaPrivateKey = privateKeyPem.Contains(rsaHeader);
-			string base64 = privateKeyPem.Replace(isRsaPrivateKey ? rsaHeader : pkcs8Header, string.Empty)
-			                             .Replace(isRsaPrivateKey ? rsaFooter : pkcs8Footer, string.Empty)
+			string header = isRsaPrivateKey ? rsaHeader : pkcs8Header;
+			string footer = isRsaPrivateKey ? rsaFooter : pkcs8Footer;
+
+			if (privateKeyPem.Contains(header) == false || privateKeyPem.Contains(footer) == false)
+			{
+				throw new SheetSchemaBuilderException("서비스 계정 개인 키가 지원되는 PEM 형식이 아닙니다.");
+			}
+
+			string base64 = privateKeyPem.Replace(header, string.Empty)
+			                             .Replace(footer, string.Empty)
 			                             .Replace("\r", string.Empty)
 			                             .Replace("\n", string.Empty)
 			                             .Trim();
-			byte[] keyBytes = Convert.FromBase64String(base64);
 
-			if (isRsaPrivateKey)
+			try
 			{
-				rsa.ImportRSAPrivateKey(keyBytes, out _);
+				byte[] keyBytes = Convert.FromBase64String(base64);
+				byte[] pkcs1Bytes = isRsaPrivateKey ? keyBytes : ReadPkcs8PrivateKey(keyBytes);
+				rsa.ImportParameters(ReadRsaParameters(pkcs1Bytes));
 			}
-			else
+			catch (Exception exception) when (exception is FormatException || exception is CryptographicException)
 			{
-				rsa.ImportPkcs8PrivateKey(keyBytes, out _);
+				throw new SheetSchemaBuilderException("서비스 계정 RSA 개인 키를 읽지 못했습니다.", exception);
 			}
-#else
-			rsa.ImportFromPem(privateKeyPem);
-#endif
+		}
+
+		/// <summary>PKCS#8 PrivateKeyInfo에서 내부 PKCS#1 RSA 키를 꺼낸다.</summary>
+		private static byte[] ReadPkcs8PrivateKey(byte[] keyBytes)
+		{
+			DerReader privateKeyInfo = new DerReader(keyBytes).ReadSequence();
+			privateKeyInfo.ReadInteger(); // version
+			privateKeyInfo.ReadSequence(); // algorithm identifier
+			return privateKeyInfo.ReadOctetString();
+		}
+
+		/// <summary>PKCS#1 RSAPrivateKey를 Unity Mono에서도 지원되는 RSAParameters로 변환한다.</summary>
+		private static RSAParameters ReadRsaParameters(byte[] pkcs1Bytes)
+		{
+			DerReader key = new DerReader(pkcs1Bytes).ReadSequence();
+			key.ReadInteger(); // version
+
+			return new RSAParameters
+			{
+				Modulus = key.ReadInteger(),
+				Exponent = key.ReadInteger(),
+				D = key.ReadInteger(),
+				P = key.ReadInteger(),
+				Q = key.ReadInteger(),
+				DP = key.ReadInteger(),
+				DQ = key.ReadInteger(),
+				InverseQ = key.ReadInteger(),
+			};
+		}
+
+		/// <summary>서비스 계정 RSA 키에 필요한 DER SEQUENCE, INTEGER, OCTET STRING만 읽는다.</summary>
+		private sealed class DerReader
+		{
+			private readonly byte[] _data;
+			private readonly int _end;
+			private int _position;
+
+			public DerReader(byte[] data) : this(data, 0, data.Length) {}
+
+			private DerReader(byte[] data, int offset, int length)
+			{
+				_data = data;
+				_position = offset;
+				_end = checked(offset + length);
+
+				if (offset < 0 || length < 0 || _end > data.Length)
+				{
+					throw new CryptographicException("DER 데이터 범위가 잘못되었습니다.");
+				}
+			}
+
+			public DerReader ReadSequence()
+			{
+				(int offset, int length) = ReadValue(0x30);
+				return new DerReader(_data, offset, length);
+			}
+
+			public byte[] ReadInteger()
+			{
+				(int offset, int length) = ReadValue(0x02);
+				while (length > 1 && _data[offset] == 0)
+				{
+					offset++;
+					length--;
+				}
+
+				byte[] value = new byte[length];
+				Buffer.BlockCopy(_data, offset, value, 0, length);
+				return value;
+			}
+
+			public byte[] ReadOctetString()
+			{
+				(int offset, int length) = ReadValue(0x04);
+				byte[] value = new byte[length];
+				Buffer.BlockCopy(_data, offset, value, 0, length);
+				return value;
+			}
+
+			private (int Offset, int Length) ReadValue(byte expectedTag)
+			{
+				if (_position >= _end || _data[_position++] != expectedTag)
+				{
+					throw new CryptographicException($"DER 태그 0x{expectedTag:X2}가 필요합니다.");
+				}
+
+				int length = ReadLength();
+				int offset = _position;
+				_position = checked(_position + length);
+
+				if (length < 0 || _position > _end)
+				{
+					throw new CryptographicException("DER 데이터 길이가 잘못되었습니다.");
+				}
+
+				return (offset, length);
+			}
+
+			private int ReadLength()
+			{
+				if (_position >= _end)
+				{
+					throw new CryptographicException("DER 길이 정보가 없습니다.");
+				}
+
+				int first = _data[_position++];
+				if ((first & 0x80) == 0)
+				{
+					return first;
+				}
+
+				int byteCount = first & 0x7F;
+				if (byteCount == 0 || byteCount > sizeof(int) || _position + byteCount > _end)
+				{
+					throw new CryptographicException("DER 길이 정보가 잘못되었습니다.");
+				}
+
+				int length = 0;
+				for (int i = 0; i < byteCount; i++)
+				{
+					length = checked((length << 8) | _data[_position++]);
+				}
+
+				return length;
+			}
 		}
 	}
 }
