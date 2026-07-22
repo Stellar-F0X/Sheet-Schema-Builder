@@ -46,8 +46,8 @@ UE Python을 사용하여 GUI를 그리기 때문에 Unreal의 Python Editor Scr
 Unity 에디터는 항상 Unity Target으로, Unreal 에디터는 항상 Unreal Target으로 실행합니다. <br>
 에디터 UI에서는 Target을 선택하지 않으며, 저장된 `.ini`의 Target 값이 잘못되어 있어도 각 에디터가 자기 엔진 값을 강제로 넘깁니다.
 
-Unity 에디터 버튼은 같은 프로세스 안에서 빌더 DLL의 `DataBuilder.SheetSchemaBuilder.Process(...)`를 직접 호출합니다.<br>
-Unreal 에디터 버튼은 Python에서 `USheetSchemaBuilderEditorLibrary`를 호출하고, C++ Editor 모듈이 플랫폼별 native library의 `SheetSchemaBuilder_Process` export를 호출합니다. <br>
+Unity 에디터 버튼은 같은 프로세스 안에서 빌더 DLL의 `DataBuilder.SheetSchemaBuilder.ProcessWithResult(...)`를 직접 호출하고, 종료 코드와 출력·오류 문자열을 함께 받아 표시합니다.<br>
+Unreal 에디터 버튼은 Python에서 `USheetSchemaBuilderEditorLibrary`를 호출하고, C++ Editor 모듈이 플랫폼별 native library의 `SheetSchemaBuilder_Process` export를 호출합니다. 실행 결과는 `ExitCode`와 상세 로그 문자열 `Output`을 담은 `FSheetSchemaBuilderRunResult`로 Python에 전달됩니다. <br>
 두 엔진 모두 에디터 실행 시 별도 `dotnet` 프로세스를 만들지 않습니다.
 
 DLL에는 엔진별 기본 템플릿이 embedded resource로 포함됩니다. <br>
@@ -74,7 +74,7 @@ DLL에는 엔진별 기본 템플릿이 embedded resource로 포함됩니다. <b
 6. `Run` 또는 `Run Force`로 코드와 Json을 생성합니다.
 
 Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 수 없습니다. <br>
-이 경우 `Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.ini`를 직접 수정한 뒤 Unreal Python에서 `unreal.SheetSchemaBuilderEditorLibrary.run_sheet_schema_builder(...)`를 호출할 수 있습니다.
+이 경우 `Package/Unreal/SheetSchemaBuilder/Sheet-Schema-Builder.ini`를 직접 수정한 뒤 Unreal Python에서 `unreal.SheetSchemaBuilderEditorLibrary.run_sheet_schema_builder_with_result(...)`를 호출할 수 있습니다. 반환값의 `exit_code`와 `output` 문자열로 성공 여부와 상세 실패 사유를 확인합니다. 기존 `run_sheet_schema_builder(...)`와 `get_last_output()`도 호환성을 위해 유지됩니다.
 
 ## 동작 순서
 
@@ -156,11 +156,11 @@ Sheets =                         ; 비우면 전체 시트
 Target = Unity                    ; CLI/수동 실행용. 엔진 에디터에서는 각 엔진 값으로 강제됨.
 Namespace = BS.Data
 DatabaseClassName = SheetDataBase
-DatabaseOutputDirectory = ./Generated/Database
-StructOutputDirectory = ./Generated/Database/Structs
+DatabaseOutputDirectory = ./Assets/Generated/Database
+StructOutputDirectory = ./Assets/Generated/Database/Structs
 
 [Json]
-OutputPath = ./Generated/SheetDataBase.json
+OutputPath = ./Assets/StreamingAssets/SheetDataBase.json
 ```
 
 ### Google 인증 준비

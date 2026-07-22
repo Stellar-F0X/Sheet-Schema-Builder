@@ -58,7 +58,7 @@ namespace DataBuilder.CodeGen
 		{
 			string label = result == EGenerateResult.Generated ? "[생성]" : "[스킵]";
 			string suffix = result == EGenerateResult.SkippedByHash ? " (동일한 해시의 파일이 이미 존재)" : string.Empty;
-			Console.WriteLine($"  {label} {path}{suffix}");
+			BuilderLog.Output.WriteLine($"  {label} {path}{suffix}");
 		}
 
 		protected EGenerateResult WriteFile(string path, string hash, Func<string> generateBody)

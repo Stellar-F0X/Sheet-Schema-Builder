@@ -19,9 +19,39 @@ namespace DataBuilder
 	/// </summary> 
 	public static class SheetSchemaBuilder
 	{
+		/// <summary>CLI 호환 진입점. 로그는 현재 프로세스의 표준 출력과 오류 출력으로 보낸다.</summary>
 		public static async Task<int> Process(string[] args)
 		{
 			Console.OutputEncoding = Encoding.UTF8;
+			return await ProcessCore(args, Console.Out, Console.Error);
+		}
+
+		/// <summary>Unity 등 내장 호출자가 표시할 수 있도록 실행 결과와 로그 문자열을 함께 반환한다.</summary>
+		public static async Task<BuilderProcessResult> ProcessWithResult(string[] args)
+		{
+			StringBuilder outputBuilder = new StringBuilder();
+			StringBuilder errorBuilder = new StringBuilder();
+
+			using StringWriter output = new StringWriter(outputBuilder);
+			using StringWriter error = new StringWriter(errorBuilder);
+			int exitCode;
+
+			try
+			{
+				exitCode = await ProcessCore(args, output, error);
+			}
+			catch (Exception exception)
+			{
+				error.WriteLine("[예외] " + exception);
+				exitCode = 1;
+			}
+
+			return new BuilderProcessResult(exitCode, outputBuilder.ToString(), errorBuilder.ToString());
+		}
+
+		private static async Task<int> ProcessCore(string[] args, TextWriter output, TextWriter error)
+		{
+			using IDisposable logScope = BuilderLog.Push(output, error);
 
 			try
 			{
@@ -30,16 +60,28 @@ namespace DataBuilder
 			}
 			catch (SheetSchemaBuilderException exception)
 			{
-				Console.Error.WriteLine($"[오류] {exception.Message}");
+				BuilderLog.Error.WriteLine($"[오류] {exception.Message}");
 				return 1;
 			}
 			finally
 			{
+				CollectGarbage();
+			}
+		}
+
+		private static void CollectGarbage()
+		{
+			try
+			{
 				System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
 				GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-				GC.WaitForPendingFinalizers();
-				GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
 			}
+			catch (NotSupportedException)
+			{
+				GC.Collect();
+			}
+
+			GC.WaitForPendingFinalizers();
 		}
 
 
@@ -86,7 +128,7 @@ namespace DataBuilder
 			}
 
 			BuilderConfig config = BuilderConfig.Load(iniPath, targetOverride, baseDirectoryOverride);
-			Console.WriteLine($"설정 로드: {Path.GetFullPath(iniPath)} (AuthMode: {config.AuthMode}, CodeGenTarget: {config.CodeGenTarget})");
+			BuilderLog.Output.WriteLine($"설정 로드: {Path.GetFullPath(iniPath)} (AuthMode: {config.AuthMode}, CodeGenTarget: {config.CodeGenTarget})");
 
 			// 1. 시트 데이터를 가져온다.
 			ISheetSource source;
@@ -111,7 +153,7 @@ namespace DataBuilder
 				(source as IDisposable)?.Dispose();
 			}
 
-			Console.WriteLine($"시트 {rawSheets.Count}개 로드: {string.Join(", ", rawSheets.Select(s => s.Name))}");
+			BuilderLog.Output.WriteLine($"시트 {rawSheets.Count}개 로드: {string.Join(", ", rawSheets.Select(s => s.Name))}");
 
 			// 시트 구조(1행: 타입, 2행: 필드명, 3행~: 데이터)를 해석하고 참조 관계를 검증한다.
 			List<SheetTable> tables = rawSheets.Select(SheetTable.Parse).ToList();
@@ -119,16 +161,16 @@ namespace DataBuilder
 			EnumRegistry enums = EnumRegistry.Build(tables);
 
 			// 2~4, 8-1. 구조체 / enum / 데이터베이스 클래스를 코드 제네레이션한다.
-			Console.WriteLine();
-			Console.WriteLine("코드 생성:");
+			BuilderLog.Output.WriteLine();
+			BuilderLog.Output.WriteLine("코드 생성:");
 			CreateCodeGenerator(config, tables, enums, force).GenerateAll();
 
 			// 7~9. 데이터 무결성(키 중복, ref 대상 존재)을 검증하며 전체 데이터를 Json으로 저장한다.
 			new JsonExporter(tables, enums).Export(config.JsonOutputPath);
 
-			Console.WriteLine();
-			Console.WriteLine($"Json 저장: {config.JsonOutputPath}");
-			Console.WriteLine($"완료 — 시트 {tables.Count}개, 총 {tables.Sum(t => t.Rows.Count)}개 행.");
+			BuilderLog.Output.WriteLine();
+			BuilderLog.Output.WriteLine($"Json 저장: {config.JsonOutputPath}");
+			BuilderLog.Output.WriteLine($"완료 — 시트 {tables.Count}개, 총 {tables.Sum(t => t.Rows.Count)}개 행.");
 		}
 
 

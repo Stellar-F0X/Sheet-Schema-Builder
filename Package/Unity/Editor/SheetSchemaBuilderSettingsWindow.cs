@@ -298,59 +298,39 @@ namespace SheetSchemaBuilder.UnityEditorTools
             try
             {
                 EditorUtility.DisplayProgressBar("Sheet Schema Builder", "Running builder...", 0.5f);
-                StringBuilder logBuilder = new StringBuilder();
-                TextWriter originalOutput = Console.Out;
-                TextWriter originalError = Console.Error;
-                int exitCode;
-
-                using (StringWriter output = new StringWriter(logBuilder))
-                using (StringWriter error = new StringWriter(logBuilder))
+                List<string> args = new List<string>
                 {
-                    Console.SetOut(output);
-                    Console.SetError(error);
-                    try
-                    {
-                        List<string> args = new List<string>
-                        {
-                            _iniPath,
-                            "--target",
-                            TargetName,
-                            "--base-directory",
-                            SheetSchemaBuilderProjectSettings.ProjectRoot
-                        };
+                    _iniPath,
+                    "--target",
+                    TargetName,
+                    "--base-directory",
+                    SheetSchemaBuilderProjectSettings.ProjectRoot
+                };
 
-                        if (force)
-                        {
-                            args.Add("--force");
-                        }
-
-                        exitCode = await Task.Run(() => DataBuilder.SheetSchemaBuilder.Process(args.ToArray()));
-                    }
-                    finally
-                    {
-                        output.Flush();
-                        error.Flush();
-                        Console.SetOut(originalOutput);
-                        Console.SetError(originalError);
-                    }
+                if (force)
+                {
+                    args.Add("--force");
                 }
 
-                string log = logBuilder.ToString();
-                if (string.IsNullOrWhiteSpace(log) == false)
-                {
-                    Debug.Log(log);
-                }
+                DataBuilder.BuilderProcessResult result = await Task.Run(() => DataBuilder.SheetSchemaBuilder.ProcessWithResult(args.ToArray()));
+                string log = result.CombinedLog;
 
-                if (exitCode == 0)
+                if (result.ExitCode == 0)
                 {
+                    if (string.IsNullOrWhiteSpace(log) == false)
+                    {
+                        Debug.Log(log);
+                    }
+
                     AssetDatabase.Refresh();
                     ShowNotification(new GUIContent("Sheet Schema Builder completed"));
                     EditorUtility.DisplayDialog("Sheet Schema Builder", string.IsNullOrWhiteSpace(log) ? "Completed." : log, "OK");
                 }
                 else
                 {
-                    Debug.LogError(log);
-                    EditorUtility.DisplayDialog("Sheet Schema Builder Failed", string.IsNullOrWhiteSpace(log) ? "Exit code: " + exitCode : log, "OK");
+                    string errorMessage = string.IsNullOrWhiteSpace(log) ? "Exit code: " + result.ExitCode : log;
+                    Debug.LogError(errorMessage);
+                    EditorUtility.DisplayDialog("Sheet Schema Builder Failed", errorMessage, "OK");
                 }
             }
             catch (Exception exception)
@@ -504,8 +484,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     Target = target,
                     Namespace = "BS.Data",
                     DatabaseClassName = "SheetDataBase",
-                    DatabaseOutputDirectory = "./Generated/Database",
-                    StructOutputDirectory = "./Generated/Database/Structs"
+                    DatabaseOutputDirectory = "./Assets/Generated/Database",
+                    StructOutputDirectory = "./Assets/Generated/Database/Structs"
                 };
             }
         }
@@ -517,7 +497,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
             public static JsonSettings Default
             {
-                get { return new JsonSettings { OutputPath = "./Generated/SheetDataBase.json" }; }
+                get { return new JsonSettings { OutputPath = "./Assets/StreamingAssets/SheetDataBase.json" }; }
             }
         }
 

@@ -9,33 +9,18 @@ namespace SheetSchemaBuilderNative
         [UnmanagedCallersOnly(EntryPoint = "SheetSchemaBuilder_Process", CallConvs = new[] { typeof(CallConvCdecl) })]
         public static int Process(byte* iniPath, int force, delegate* unmanaged[Cdecl]<byte*, void> logCallback)
         {
-            TextWriter originalOutput = Console.Out;
-            TextWriter originalError = Console.Error;
-            StringBuilder logBuilder = new StringBuilder();
-
             try
             {
-                using StringWriter output = new StringWriter(logBuilder);
-                using StringWriter error = new StringWriter(logBuilder);
-                Console.SetOut(output);
-                Console.SetError(error);
                 string iniPathText = iniPath == null ? "Sheet-Schema-Builder.ini" : Marshal.PtrToStringUTF8((IntPtr)iniPath) ?? "Sheet-Schema-Builder.ini";
                 string[] args = force != 0 ? new[] { iniPathText, "--target", "Unreal", "--force" } : new[] { iniPathText, "--target", "Unreal" };
-                int exitCode = DataBuilder.SheetSchemaBuilder.Process(args).GetAwaiter().GetResult();
-                output.Flush();
-                error.Flush();
-                SendLog(logCallback, logBuilder.ToString());
-                return exitCode;
+                DataBuilder.BuilderProcessResult result = DataBuilder.SheetSchemaBuilder.ProcessWithResult(args).GetAwaiter().GetResult();
+                SendLog(logCallback, result.CombinedLog);
+                return result.ExitCode;
             }
             catch (Exception exception)
             {
-                SendLog(logCallback, logBuilder + exception.ToString());
+                SendLog(logCallback, exception.ToString());
                 return 1;
-            }
-            finally
-            {
-                Console.SetOut(originalOutput);
-                Console.SetError(originalError);
             }
         }
 

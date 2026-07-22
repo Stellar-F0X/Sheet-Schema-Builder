@@ -150,6 +150,11 @@ class BuilderRunner:
             return BuilderRunResult(1, "", "SheetSchemaBuilderEditor C++ module is not available.")
 
         library = unreal.SheetSchemaBuilderEditorLibrary
+        run_with_result = getattr(library, "run_sheet_schema_builder_with_result", None)
+        if run_with_result is not None:
+            result = run_with_result(str(ini_path), bool(force))
+            return BuilderRunResult(int(result.exit_code), str(result.output), "")
+
         run = getattr(library, "run_sheet_schema_builder", None)
         get_last_output = getattr(library, "get_last_output", None)
         if run is None or get_last_output is None:
@@ -484,13 +489,15 @@ class SheetSchemaBuilderWindow:
             self.finish_run(1, str(exception))
 
     def finish_run(self, exit_code, output):
+        output = output.strip()
         self.output.insert("end", output + "\n")
         self.output.see("end")
 
         if exit_code == 0:
             self.messagebox.showinfo("Sheet Schema Builder", "Completed.")
         else:
-            self.messagebox.showerror("Sheet Schema Builder", f"Failed. ExitCode: {exit_code}")
+            error_message = output or f"Failed. ExitCode: {exit_code}"
+            self.messagebox.showerror("Sheet Schema Builder", error_message)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,14 @@ namespace SheetSchemaBuilderEditor
 #endif
 }
 
+FSheetSchemaBuilderRunResult USheetSchemaBuilderEditorLibrary::RunSheetSchemaBuilderWithResult(const FString& IniPath, bool bForce)
+{
+    FSheetSchemaBuilderRunResult result;
+    result.ExitCode = RunSheetSchemaBuilder(IniPath, bForce);
+    result.Output = SheetSchemaBuilderEditor::GLastOutput;
+    return result;
+}
+
 int32 USheetSchemaBuilderEditorLibrary::RunSheetSchemaBuilder(const FString& IniPath, bool bForce)
 {
     SheetSchemaBuilderEditor::GLastOutput.Empty();
