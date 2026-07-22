@@ -217,6 +217,7 @@ class SheetSchemaBuilderWindow:
         self.settings = BuilderIniSettings.load(self.ini_path)
         self.runner = BuilderRunner()
         self.vars = {}
+        self.field_widgets = {}
         self.root = None
         self.output = None
         self.style = None
@@ -357,13 +358,16 @@ class SheetSchemaBuilderWindow:
         self.ttk.Label(auth_frame, text="Auth Mode", width=22).pack(side="left")
         auth_var = self.tk.StringVar(value=self.settings.google_sheet.auth_mode)
         self.vars[("google_sheet", "auth_mode")] = auth_var
-        self.ttk.Combobox(auth_frame, textvariable=auth_var, values=["ServiceAccount", "ApiKey", "Local"], state="readonly").pack(side="left", fill="x", expand=True)
+        auth_combo = self.ttk.Combobox(auth_frame, textvariable=auth_var, values=["ServiceAccount", "ApiKey", "Local"], state="readonly")
+        auth_combo.pack(side="left", fill="x", expand=True)
+        auth_combo.bind("<<ComboboxSelected>>", self.update_auth_fields)
 
         self.add_entry_row(container, "google_sheet", "spreadsheet_id", "Spreadsheet ID")
         self.add_entry_row(container, "google_sheet", "service_account_json_path", "Service Account JSON", browse="file")
         self.add_entry_row(container, "google_sheet", "api_key", "API Key")
         self.add_entry_row(container, "google_sheet", "local_directory", "Local TSV Directory", browse="directory")
         self.add_entry_row(container, "google_sheet", "sheets", "Sheets")
+        self.update_auth_fields()
 
         self.add_section(container, "Code Generation")
         self.add_entry_row(container, "code_gen", "namespace", "Namespace")
@@ -403,10 +407,30 @@ class SheetSchemaBuilderWindow:
         self.ttk.Label(frame, text=label, width=22).pack(side="left")
         var = self.tk.StringVar(value=getattr(getattr(self.settings, section_name), field_name))
         self.vars[(section_name, field_name)] = var
-        self.ttk.Entry(frame, textvariable=var).pack(side="left", fill="x", expand=True)
+        entry = self.ttk.Entry(frame, textvariable=var)
+        entry.pack(side="left", fill="x", expand=True)
+        widgets = [entry]
 
         if browse is not None:
-            self.ttk.Button(frame, text="...", width=3, command=lambda: self.browse_path(var, browse)).pack(side="left", padx=(6, 0))
+            browse_button = self.ttk.Button(frame, text="...", width=3, command=lambda: self.browse_path(var, browse))
+            browse_button.pack(side="left", padx=(6, 0))
+            widgets.append(browse_button)
+
+        self.field_widgets[(section_name, field_name)] = widgets
+
+    def update_auth_fields(self, *_args):
+        auth_mode = self.vars[("google_sheet", "auth_mode")].get()
+        enabled_fields = {
+            "spreadsheet_id": auth_mode != "Local",
+            "service_account_json_path": auth_mode == "ServiceAccount",
+            "api_key": auth_mode == "ApiKey",
+            "local_directory": auth_mode == "Local",
+        }
+
+        for field_name, enabled in enabled_fields.items():
+            state = "normal" if enabled else "disabled"
+            for widget in self.field_widgets.get(("google_sheet", field_name), []):
+                widget.configure(state=state)
 
     def browse_ini(self):
         selected = self.filedialog.askopenfilename(initialdir=str(self.ini_path.parent), filetypes=[("INI", "*.ini"), ("All", "*.*")])
@@ -430,6 +454,8 @@ class SheetSchemaBuilderWindow:
 
         for (section_name, field_name), var in self.vars.items():
             var.set(getattr(getattr(self.settings, section_name), field_name))
+
+        self.update_auth_fields()
 
     def save(self):
         self.ini_path = Path(self.ini_var.get())

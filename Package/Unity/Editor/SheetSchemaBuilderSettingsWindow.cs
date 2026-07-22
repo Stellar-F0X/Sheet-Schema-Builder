@@ -80,10 +80,27 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 EditorGUILayout.Space(12);
                 EditorGUILayout.LabelField("Google Sheet", EditorStyles.boldLabel);
                 _settings.GoogleSheet.AuthMode = (EAuthMode)EditorGUILayout.EnumPopup("Auth Mode", _settings.GoogleSheet.AuthMode);
-                _settings.GoogleSheet.SpreadsheetId = EditorGUILayout.TextField("Spreadsheet ID", _settings.GoogleSheet.SpreadsheetId);
-                DrawPathField("Service Account JSON", ref _settings.GoogleSheet.ServiceAccountJsonPath, false, "json");
-                _settings.GoogleSheet.ApiKey = EditorGUILayout.TextField("API Key", _settings.GoogleSheet.ApiKey);
-                DrawPathField("Local TSV Directory", ref _settings.GoogleSheet.LocalDirectory, true, string.Empty);
+
+                using (new EditorGUI.DisabledScope(_settings.GoogleSheet.AuthMode == EAuthMode.Local))
+                {
+                    _settings.GoogleSheet.SpreadsheetId = EditorGUILayout.TextField("Spreadsheet ID", _settings.GoogleSheet.SpreadsheetId);
+                }
+
+                using (new EditorGUI.DisabledScope(_settings.GoogleSheet.AuthMode != EAuthMode.ServiceAccount))
+                {
+                    DrawPathField("Service Account JSON", ref _settings.GoogleSheet.ServiceAccountJsonPath, false, "json");
+                }
+
+                using (new EditorGUI.DisabledScope(_settings.GoogleSheet.AuthMode != EAuthMode.ApiKey))
+                {
+                    _settings.GoogleSheet.ApiKey = EditorGUILayout.TextField("API Key", _settings.GoogleSheet.ApiKey);
+                }
+
+                using (new EditorGUI.DisabledScope(_settings.GoogleSheet.AuthMode != EAuthMode.Local))
+                {
+                    DrawPathField("Local TSV Directory", ref _settings.GoogleSheet.LocalDirectory, true, string.Empty);
+                }
+
                 _settings.GoogleSheet.Sheets = EditorGUILayout.TextField("Sheets", _settings.GoogleSheet.Sheets);
                 EditorGUILayout.HelpBox("Sheets is a comma-separated list. Leave it empty to fetch every sheet.", MessageType.None);
 
