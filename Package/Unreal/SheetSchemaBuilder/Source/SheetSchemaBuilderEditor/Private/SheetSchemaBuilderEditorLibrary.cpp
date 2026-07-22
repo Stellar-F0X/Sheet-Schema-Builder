@@ -48,7 +48,7 @@ int32 USheetSchemaBuilderEditorLibrary::RunSheetSchemaBuilder(const FString& Ini
     FTCHARToUTF8 iniPathUtf8(*fullIniPath);
     return process(iniPathUtf8.Get(), bForce ? 1 : 0, &SheetSchemaBuilderEditor::AppendLog);
 #else
-    SheetSchemaBuilderEditor::GLastOutput = TEXT("SheetSchemaBuilder native library is not supported on this Unreal target platform.");
+    SheetSchemaBuilderEditor::GLastOutput = TEXT("Sheet Schema Builder for Unreal supports Windows 64-bit only.");
     return 1;
 #endif
 }

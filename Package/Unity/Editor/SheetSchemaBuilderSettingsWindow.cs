@@ -288,15 +288,10 @@ namespace SheetSchemaBuilder.UnityEditorTools
 
         private async void RunBuilder(bool force)
         {
-            if (File.Exists(_iniPath) == false)
-            {
-                EditorUtility.DisplayDialog("Sheet Schema Builder", "INI file does not exist. Press Save INI before running.\n\n" + _iniPath, "OK");
-                return;
-            }
-
             _isRunning = true;
             try
             {
+                _settings.Save(_iniPath, TargetName);
                 EditorUtility.DisplayProgressBar("Sheet Schema Builder", "Running builder...", 0.5f);
                 List<string> args = new List<string>
                 {

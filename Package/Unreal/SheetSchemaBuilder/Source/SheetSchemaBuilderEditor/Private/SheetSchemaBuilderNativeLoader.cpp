@@ -7,21 +7,6 @@ namespace SheetSchemaBuilderNativeLoader
 {
     static void* GNativeHandle = nullptr;
     static FSheetSchemaBuilderProcess GProcess = nullptr;
-
-    static TArray<FString> GetNativeRelativePathCandidates()
-    {
-        TArray<FString> candidates;
-#if PLATFORM_WINDOWS
-        candidates.Add(TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Win64/SheetSchemaBuilderNative.dll"));
-#elif PLATFORM_LINUX
-        candidates.Add(TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Linux/libSheetSchemaBuilderNative.so"));
-        candidates.Add(TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Linux/SheetSchemaBuilderNative.so"));
-#elif PLATFORM_MAC
-        candidates.Add(TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Mac/libSheetSchemaBuilderNative.dylib"));
-        candidates.Add(TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Mac/SheetSchemaBuilderNative.dylib"));
-#endif
-        return candidates;
-    }
 }
 
 bool LoadSheetSchemaBuilderNative(FString& ErrorMessage)
@@ -39,20 +24,13 @@ bool LoadSheetSchemaBuilderNative(FString& ErrorMessage)
         return false;
     }
 
-    FString dllPath;
-    for (const FString& relativePath : SheetSchemaBuilderNativeLoader::GetNativeRelativePathCandidates())
-    {
-        FString candidatePath = FPaths::Combine(plugin->GetBaseDir(), relativePath);
-        if (FPaths::FileExists(candidatePath))
-        {
-            dllPath = candidatePath;
-            break;
-        }
-    }
+    FString dllPath = FPaths::Combine(
+        plugin->GetBaseDir(),
+        TEXT("Binaries/ThirdParty/SheetSchemaBuilder/Win64/SheetSchemaBuilderNative.dll"));
 
-    if (dllPath.IsEmpty())
+    if (!FPaths::FileExists(dllPath))
     {
-        ErrorMessage = FString::Printf(TEXT("Native builder library was not found under plugin: %s"), *plugin->GetBaseDir());
+        ErrorMessage = FString::Printf(TEXT("Native builder library was not found: %s"), *dllPath);
         return false;
     }
 
@@ -73,7 +51,7 @@ bool LoadSheetSchemaBuilderNative(FString& ErrorMessage)
 
     return true;
 #else
-    ErrorMessage = TEXT("SheetSchemaBuilderNative.dll/lib was not found when the Unreal module was built.");
+    ErrorMessage = TEXT("Sheet Schema Builder for Unreal supports Windows 64-bit only.");
     return false;
 #endif
 }

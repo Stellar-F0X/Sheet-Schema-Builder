@@ -462,20 +462,21 @@ class SheetSchemaBuilderWindow:
 
         self.update_auth_fields()
 
-    def save(self):
+    def save(self, show_notification=True):
         self.ini_path = Path(self.ini_var.get())
 
         for (section_name, field_name), var in self.vars.items():
             setattr(getattr(self.settings, section_name), field_name, var.get())
 
         self.settings.save(self.ini_path)
-        self.messagebox.showinfo("Sheet Schema Builder", "Sheet-Schema-Builder.ini saved.")
+        if show_notification:
+            self.messagebox.showinfo("Sheet Schema Builder", "Sheet-Schema-Builder.ini saved.")
 
     def run_builder(self, force):
-        self.ini_path = Path(self.ini_var.get())
-
-        if not self.ini_path.exists():
-            self.messagebox.showerror("Sheet Schema Builder", f"INI file does not exist. Press Save INI before running.\n{self.ini_path}")
+        try:
+            self.save(show_notification=False)
+        except Exception as exception:
+            self.finish_run(1, f"Failed to save INI file.\n{exception}")
             return
 
         self.output.insert("end", "Running Sheet Schema Builder...\n")
