@@ -1,0 +1,48 @@
+{
+  "Stage": [
+    {
+      "Name": "Tutorial",
+      "Stage_ID": 0
+    },
+    {
+      "Name": "Mine",
+      "Stage_ID": 1
+    }
+  ],
+  "Mine": [
+    {
+      "Mine_ID": 31200,
+      "Name": "Iron"
+    },
+    {
+      "Mine_ID": 31201,
+      "Name": "Gold"
+    }
+  ],
+  "Mine_Stat": [
+    {
+      "Group": 0,
+      "Stage_ID": 0,
+      "Mine_Stat_ID": 0,
+      "Mine_ID": 31200,
+      "Spawn_Weight": 0.7
+    },
+    {
+      "Group": 0,
+      "Stage_ID": 0,
+      "Mine_Stat_ID": 1,
+      "Mine_ID": 31201,
+      "Spawn_Weight": 0.3
+    }
+  ],
+  "Loose": [
+    {
+      "Value": 0,
+      "Name": "A"
+    },
+    {
+      "Value": 0,
+      "Name": "B"
+    }
+  ]
+}

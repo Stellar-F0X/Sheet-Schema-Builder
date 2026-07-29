@@ -80,7 +80,7 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 
 1. `.ini`에 적힌 인증 정보로 Google Sheet에 접근해 모든(또는 지정한) 시트를 읽는다.
 2. 실행 Target에 따라 Unity용 C# 구조체 또는 Unreal용 C++ `USTRUCT` 헤더를 생성한다.
-3. 모든 시트의 배열과 Key-Value 인덱스를 가진 데이터베이스 타입을 생성한다.
+3. 명시된 PK/FK 관계를 해석하고, PK가 있는 시트의 조회 인덱스를 가진 데이터베이스 타입을 생성한다.
 4. 전체 시트 데이터를 생성된 데이터베이스 타입에 맞는 Json으로 저장한다. 
 
 ### 해시 기반 재생성 스킵
@@ -93,48 +93,39 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 
 | 행 | 내용 | 예 |
 |---|---|---|
-| 1행 | 각 열의 데이터 타입 | `int`, `string`, `float`, `enum:ItemType`, `ref:Monster` |
+| 1행 | 각 열의 데이터 타입과 선택적인 키 역할 | `int(pk)`, `int(fk)`, `float`, `enum:ItemType` |
 | 2행 | 필드명 | `id`, `name`, `price` |
 | 3행~ | 데이터 | `1`, `Wooden Sword`, `100` |
 
 - 이름이 `_`로 시작하는 시트는 **파싱하지 않고 건너뜁니다**. (메모/작업용 시트)
 
-- **첫 번째 열이 그 시트의 Key**입니다. (`int` / `long` / `float` / `double` / `string` / `enum`)
+- 첫 번째 열을 자동으로 키로 취급하지 않습니다. 키 역할이 없는 열은 위치와 값 중복 여부에 관계없이 일반 데이터로 저장됩니다.
 
-- 지원 타입: `int`, `long`, `float`, `double`, `bool`, `string`, `enum:이름`, `ref:시트명`
+- 지원 타입: `int`, `long`, `float`, `double`, `bool`, `string`, `enum:이름`
 
 - `enum:이름`: 열 데이터에 등장한 값들로 enum이 자동 생성됩니다. <br>
   생성 타입명에는 `E` 접두사가 붙습니다. (예: `enum:ItemType` → `EItemType`)
-  
-- 참조 컬럼은 두 방식으로 지정할 수 있습니다.
-  - 자동 참조: 어떤 컬럼명이 다른 시트의 첫 번째 컬럼명(Key)과 같으면 그 시트를 참조합니다.
-  - 명시 참조: `ref:시트명` 또는 `ref:Key컬럼명`을 타입 행에 적습니다.
-  - 구조체에 `Get{필드명}(SheetDataBase db)` Getter가 생성됩니다.
-  - Json 저장 시 참조 키가 실제 대상 시트에 존재하는지 검증합니다.
 
-### 명시 참조:
+### PK/FK로 시트 연결
 
-|int| string       | int  | enum:ItemType| ref:Monster | bool      |
-|---|---|---|---|---|---|
-|id | name         | price| type         | dropMonster | stackable |
-|1  | Wooden Sword | 100  | Weapon       | 1           |  FALSE    |
+- `자료형(pk)`: 해당 열을 시트의 PK로 지정합니다. 예: `int(pk)`, `string(pk)`, `enum:ItemType(pk)`
+- `자료형(fk)`: 해당 열을 FK로 지정합니다. 예: `int(fk)`, `string(fk)`
+- PK는 시트마다 0개 또는 1개만 허용됩니다. 2개 이상이면 오류입니다.
+- PK 값은 해당 시트 안에서 비어 있거나 중복될 수 없습니다.
+- FK는 **필드명이 같은 PK**를 가진 시트에 연결됩니다. 일치하는 PK가 없거나 둘 이상이면 오류입니다.
+- FK와 대상 PK의 자료형은 같아야 하며, 모든 FK 값은 대상 PK에 실제로 존재해야 합니다.
+- FK 값은 반복될 수 있습니다. 또한 서로 다른 PK/FK 열이나 시트에서 같은 값(예: `0`)을 사용하는 것도 허용됩니다.
+- `(pk)`가 없는 시트도 유효하며 배열 데이터는 생성되지만, 해당 시트의 `Get...`/`TryGet...` PK 조회기는 생성되지 않습니다.
 
-### 자동 참조:
+예를 들어 `Stage` 시트의 `Stage_ID`가 `int(pk)`이면, 아래 `Mine_Stat` 시트의 같은 이름인 `Stage_ID` `int(fk)`가 `Stage`를 참조합니다. PK가 첫 번째 열일 필요는 없습니다.
 
-`Map` 시트의 첫 번째 컬럼이 `Map_ID`라면, 다른 시트의 `Map_ID` 컬럼은 자동으로 `Map` 시트를 참조합니다. <br>
-ID 값 자체가 시트 이름일 필요는 없고, 참조 판단은 컬럼명 기준으로 이루어집니다. 
+| int | int(fk) | int(pk) | int(fk) | float |
+|---|---|---|---|---|
+| Group | Stage_ID | Mine_Stat_ID | Mine_ID | Spawn_Weight |
+| 0 | 0 | 0 | 31200 | 0.7 |
+| 0 | 0 | 1 | 31201 | 0.3 |
 
-|int| string| float| 
-|---|---|---|
-|Stage_ID|  Stage_Name|  Map_ID| 
-|0|         스테이지 1|  10001|
-|1|         스테이지 2|  10002|
-
-|int| int |
-|---|---|
-|Map_ID | Map_Size |
-|10001 | 100 |
-|10002 | 150 |
+위 데이터에서 일반 첫 열 `Group`의 중복과 첫 행의 `Stage_ID == Mine_Stat_ID == 0`은 모두 허용됩니다.
 
 
 ## .ini 설정
@@ -187,8 +178,9 @@ OutputPath = ./Assets/StreamingAssets/SheetDataBase.json
 string json = File.ReadAllText(Path.Combine(Application.streamingAssetsPath, "SheetDataBase.json"));
 SheetDataBase db = SheetDataBase.FromJson(json);
 
-SItemRow item = db.GetItem(3);                 // Key-Value 조회
-SMonsterRow monster = item.GetDropMonster(db); // ref 참조 Getter
+SItemRow item = db.GetItem(3);                  // Item 시트의 명시적 PK로 조회
+SMonsterRow monster = item.GetMonster_ID(db);   // 명시적 FK로 연결된 행 조회
+SItemRow[] allItems = db.Item;                  // 시트 전체 배열
 ```
 
 ## Unreal에서 사용
@@ -212,7 +204,7 @@ Source/
   Sheets/                        Google Sheets REST v4 / 서비스 계정 JWT / 로컬 .tsv
   Model/                         시트 구조 해석 (타입·필드·데이터·해시), enum 수집
   CodeGen/                       Unity / Unreal 코드 제네레이션
-  Export/                        Json 저장 + 데이터 무결성 검증 (키 중복, ref 존재)
+  Export/                        Json 저장 + PK 중복/FK 무결성 검증
 Source.Native/
   Sheet-Schema-Builder.Native.csproj
   NativeExports.cs               Unreal C++ 모듈이 호출하는 NativeAOT export

@@ -31,6 +31,8 @@ enum class {{ENUM_NAME}} : uint8
 {{ENUM_INCLUDE}}
 #include "{{STRUCT_NAME}}.generated.h"
 
+{{REF_FORWARD_DECLARATIONS}}
+
 /// <summary>시트 '{{SHEET_NAME}}'의 한 행.</summary>
 USTRUCT(BlueprintType)
 struct {{STRUCT_NAME}}
@@ -47,7 +49,7 @@ UPROPERTY(EditAnywhere, BlueprintReadWrite)
 # END_TEMPLATE
 
 # TEMPLATE STRUCT_REF_GETTER_BLOCK
-/// <summary>{{FIELD_NAME}} 키가 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행을 돌려준다.</summary>
+/// <summary>{{FIELD_NAME}} FK가 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행을 돌려준다.</summary>
 template <typename TDatabase>
 const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
 {
@@ -63,7 +65,7 @@ const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
 {{STRUCT_INCLUDES}}
 #include "{{DATABASE_STRUCT_NAME}}.generated.h"
 
-/// <summary>모든 시트 데이터를 담는 데이터베이스.</summary>
+/// <summary>모든 시트 데이터를 담는 데이터베이스. (pk)로 조회하고 (fk)로 연결된 행을 참조한다.</summary>
 USTRUCT(BlueprintType)
 struct {{DATABASE_STRUCT_NAME}}
 {

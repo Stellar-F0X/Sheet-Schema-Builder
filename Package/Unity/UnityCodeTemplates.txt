@@ -36,7 +36,7 @@ namespace {{NAMESPACE}}
 # END_TEMPLATE
 
 # TEMPLATE REF_GETTER_BLOCK
-/// <summary>{{FIELD_NAME}} 키가 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행을 돌려준다.</summary>
+/// <summary>{{FIELD_NAME}} FK가 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행을 돌려준다.</summary>
 public {{TARGET_STRUCT_NAME}} {{METHOD_NAME}}({{DATABASE_CLASS_NAME}} database)
 {
     return database.{{DATABASE_GETTER}}(this.{{FIELD_NAME}});
@@ -52,6 +52,7 @@ namespace {{NAMESPACE}}
 {
     /// <summary>
     /// 모든 시트 데이터를 담는 데이터베이스.
+    /// (pk) 컬럼으로 시트 행을 조회하고 (fk) 컬럼으로 연결된 행을 참조한다.
     /// DataBuilder가 출력한 Json을 {{DATABASE_CLASS_NAME}}.FromJson(json)으로 읽어 사용한다.
     /// </summary>
     [Serializable]
@@ -140,4 +141,3 @@ for (int i = 0; i < {{SHEET_NAME}}.Length; i++)
     {{INDEX_FIELD_NAME}}[{{SHEET_NAME}}[i].{{KEY_FIELD_NAME}}] = {{SHEET_NAME}}[i];
 }
 # END_TEMPLATE
-

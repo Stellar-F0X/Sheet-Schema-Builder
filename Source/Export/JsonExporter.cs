@@ -16,26 +16,25 @@ namespace DataBuilder.Export
 		/// <summary>Json 내보내기에 필요한 시트 모델과 enum 정보를 보관한다.</summary>
 		public JsonExporter(IReadOnlyList<SheetTable> tables, EnumRegistry enums)
 		{
-			_tablesByName = tables.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
 			_tables = tables;
 			_enums = enums;
+			_tablesByName = tables.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase);
 		}
 
-		
-		/// <summary>시트별 Key 컬럼 값 집합. ref 무결성 검증에 사용한다.</summary>
-		private readonly Dictionary<string, HashSet<string>> _keySets = new(StringComparer.OrdinalIgnoreCase); 
-
-		private readonly Dictionary<string, SheetTable> _tablesByName;
 
 		private readonly IReadOnlyList<SheetTable> _tables;
 
 		private readonly EnumRegistry _enums;
 
+		private readonly Dictionary<string, SheetTable> _tablesByName;
+
+		private readonly Dictionary<string, HashSet<string>> _primaryKeySets = new(StringComparer.OrdinalIgnoreCase);
+
 
 		/// <summary>전체 시트 데이터를 Json 파일로 저장한다.</summary>
 		public void Export(string outputPath)
 		{
-			CollectKeys();
+			ValidateSchemaData();
 			Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
 			using FileStream stream = File.Create(outputPath);
@@ -67,29 +66,135 @@ namespace DataBuilder.Export
 		}
 
 
-		/// <summary>키 중복을 검증하며 시트별 키 집합을 만든다.</summary>
-		private void CollectKeys()
+		/// <summary>PK의 비어 있음/중복과 FK 대상 값의 존재 여부를 검증한다.</summary>
+		private void ValidateSchemaData()
+		{
+			CollectPrimaryKeys();
+			ValidateForeignKeys();
+		}
+
+
+		/// <summary>시트별 PK를 실제 직렬화 타입 기준으로 정규화하여 수집한다.</summary>
+		private void CollectPrimaryKeys()
 		{
 			foreach (SheetTable table in _tables)
 			{
-				_keySets[table.Name] = new HashSet<string>(StringComparer.Ordinal); 
-				HashSet<string> keys = _keySets[table.Name]; 
+				ColumnSpec? primaryKey = table.PrimaryKeyColumn;
+				if (primaryKey == null)
+				{
+					continue;
+				}
+
+				int columnIndex = IndexOfColumn(table, primaryKey);
+				HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+				_primaryKeySets[table.Name] = keys;
 
 				for (int r = 0; r < table.Rows.Count; r++)
 				{
-					string key = table.Rows[r][0];
-
-					if (string.IsNullOrWhiteSpace(key))
-					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: 키가 설정되어있지 않습니다.");
-					}
+					string cell = table.Rows[r][columnIndex];
+					string key = NormalizeKey(primaryKey, cell, table.Name, r);
 
 					if (keys.Add(key) == false)
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: 키 '{key}'가 중복되었습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행: PK '{primaryKey.FieldName}' 값 '{cell}'이 중복되었습니다.");
 					}
 				}
 			}
+		}
+
+
+		/// <summary>모든 FK 값이 연결된 대상 시트의 PK에 존재하는지 검증한다.</summary>
+		private void ValidateForeignKeys()
+		{
+			foreach (SheetTable table in _tables)
+			{
+				for (int c = 0; c < table.Columns.Count; c++)
+				{
+					ColumnSpec foreignKey = table.Columns[c];
+					if (foreignKey.Role != EColumnRole.ForeignKey)
+					{
+						continue;
+					}
+
+					SheetTable target = _tablesByName[foreignKey.RefSheetName];
+					HashSet<string> targetKeys = _primaryKeySets[target.Name];
+
+					for (int r = 0; r < table.Rows.Count; r++)
+					{
+						string cell = table.Rows[r][c];
+						string key = NormalizeKey(foreignKey, cell, table.Name, r);
+						if (targetKeys.Contains(key) == false)
+						{
+							throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행의 FK '{foreignKey.FieldName}' 값 '{cell}'이 대상 시트 '{target.Name}'의 PK에 없습니다.");
+						}
+					}
+				}
+			}
+		}
+
+
+		private static int IndexOfColumn(SheetTable table, ColumnSpec column)
+		{
+			for (int i = 0; i < table.Columns.Count; i++)
+			{
+				if (ReferenceEquals(table.Columns[i], column))
+				{
+					return i;
+				}
+			}
+
+			throw new InvalidOperationException($"시트 '{table.Name}'에서 컬럼 '{column.FieldName}'을 찾지 못했습니다.");
+		}
+
+
+		/// <summary>PK/FK 비교가 생성 코드의 키 비교와 같도록 셀 값을 선언 타입으로 정규화한다.</summary>
+		private string NormalizeKey(ColumnSpec column, string cell, string sheetName, int rowIndex)
+		{
+			if (string.IsNullOrWhiteSpace(cell))
+			{
+				throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행: '{column.FieldName}' 키 값이 비어 있습니다.");
+			}
+
+			switch (column.Type)
+			{
+				case EColumnType.Int:
+					if (int.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intValue))
+					{
+						return intValue.ToString(CultureInfo.InvariantCulture);
+					}
+					break;
+
+				case EColumnType.Long:
+					if (long.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out long longValue))
+					{
+						return longValue.ToString(CultureInfo.InvariantCulture);
+					}
+					break;
+
+				case EColumnType.Float:
+					if (float.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatValue) &&
+					    float.IsNaN(floatValue) == false && float.IsInfinity(floatValue) == false)
+					{
+						return floatValue.ToString("R", CultureInfo.InvariantCulture);
+					}
+					break;
+
+				case EColumnType.Double:
+					if (double.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleValue) &&
+					    double.IsNaN(doubleValue) == false && double.IsInfinity(doubleValue) == false)
+					{
+						return doubleValue.ToString("R", CultureInfo.InvariantCulture);
+					}
+					break;
+
+				case EColumnType.String:
+					return cell;
+
+				case EColumnType.Enum:
+					return _enums.GetValue(column.EnumName, cell).ToString(CultureInfo.InvariantCulture);
+			}
+
+			throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행의 키 '{column.FieldName}' 값 '{cell}'을 타입 '{column.RawType}'(으)로 해석할 수 없습니다.");
 		}
 
 
@@ -176,101 +281,11 @@ namespace DataBuilder.Export
 					break;
 				}
 
-				case EColumnType.Ref:
-				{
-					if (WriteRefCell(writer, column, cell))
-					{
-						return;
-					}
-					else
-					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {nameof(EColumnType.Ref)}(으)로 해석할 수 없습니다.");
-					}
-				}
-
 				default:
 				{
 					throw new SheetSchemaBuilderException($"지원하지 않는 컬럼 타입입니다: {column.Type}");
 				}
 			}
-		}
-
-
-		/// <summary> ref 컬럼: 대상 시트 Key 타입으로 기록하고, 대상 시트에 실제 존재하는 키인지 검증한다. </summary>
-		private bool WriteRefCell(Utf8JsonWriter writer, ColumnSpec column, string cell)
-		{
-			SheetTable target = _tablesByName[column.RefSheetName];
-
-			if (_keySets[target.Name].Contains(cell) == false) 
-			{
-				return false; 
-			}
-
-			switch (target.KeyColumn.Type)
-			{
-				case EColumnType.Int:
-				{
-					if (string.IsNullOrWhiteSpace(cell) == false && int.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out int intKey))
-					{
-						writer.WriteNumberValue(intKey);
-						return true;
-					}
-
-					break;
-				}
-
-				case EColumnType.Long:
-				{
-					if (string.IsNullOrWhiteSpace(cell) == false && long.TryParse(cell, NumberStyles.Integer, CultureInfo.InvariantCulture, out long longKey))
-					{
-						writer.WriteNumberValue(longKey);
-						return true;
-					}
-
-					break;
-				}
-
-				case EColumnType.Float:
-				{
-					if (string.IsNullOrWhiteSpace(cell) == false && float.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out float floatKey))
-					{
-						writer.WriteNumberValue(floatKey);
-						return true;
-					}
-
-					break;
-				}
-
-				case EColumnType.Double:
-				{
-					if (string.IsNullOrWhiteSpace(cell) == false && double.TryParse(cell, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleKey))
-					{
-						writer.WriteNumberValue(doubleKey);
-						return true;
-					}
-
-					break;
-				}
-
-				case EColumnType.String:
-				{
-					writer.WriteStringValue(cell);
-					return true;
-				}
-
-				case EColumnType.Enum:
-				{
-					writer.WriteNumberValue(_enums.GetValue(target.KeyColumn.EnumName, cell));
-					return true;
-				}
-
-				default:
-				{
-					throw new SheetSchemaBuilderException($"ref 대상 시트 '{target.Name}'의 Key 타입을 지원하지 않습니다: {target.KeyColumn.Type}");
-				}
-			}
-
-			return false;
 		}
 
 

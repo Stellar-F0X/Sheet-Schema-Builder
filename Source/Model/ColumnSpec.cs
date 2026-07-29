@@ -29,7 +29,14 @@ namespace DataBuilder.Model
 		public required EColumnType Type
 		{
 			get;
-			set;
+			init;
+		}
+
+		/// <summary>타입 뒤의 (pk)/(fk) 표식으로 지정한 컬럼 역할.</summary>
+		public EColumnRole Role
+		{
+			get;
+			init;
 		}
 
 		/// <summary>Type == Enum일 때 enum 타입 이름.</summary>
@@ -39,7 +46,7 @@ namespace DataBuilder.Model
 			init;
 		} = string.Empty;
 
-		/// <summary>Type == Ref일 때 참조 대상 시트 이름.</summary>
+		/// <summary>Role == ForeignKey일 때 같은 필드명의 PK를 가진 참조 대상 시트 이름.</summary>
 		public string RefSheetName
 		{
 			get;
@@ -53,11 +60,13 @@ namespace DataBuilder.Model
 			init;
 		}
 
-		/// <summary>타입 문자열을 파싱한다. int/long/float/double/bool/string, enum:이름, ref:시트명을 지원한다.</summary>
+		/// <summary>타입 문자열을 파싱한다. 기본 타입과 enum:이름, 선택적인 (pk)/(fk) 접미사를 지원한다.</summary>
 		public static ColumnSpec Parse(string sheetName, int columnIndex, string typeText, string fieldName)
 		{
 			string raw = typeText.Trim();
-			string lower = raw.ToLowerInvariant();
+			string typePart = raw;
+			EColumnRole role = ParseRoleSuffix(ref typePart);
+			string lower = typePart.ToLowerInvariant();
 			string field = Identifier.Sanitize(fieldName);
 
 			if (string.IsNullOrWhiteSpace(field))
@@ -69,23 +78,38 @@ namespace DataBuilder.Model
 
 			if (primitive.HasValue)
 			{
-				return new ColumnSpec { FieldName = field, Type = primitive.Value, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = primitive.Value, Role = role, RawType = raw };
 			}
 
-			if (TryParseNamedType(raw, "enum", out string enumName))
+			if (TryParseNamedType(typePart, "enum", out string enumName))
 			{
 				string name = Identifier.EnsurePrefix(Identifier.Sanitize(enumName), "E");
-				return new ColumnSpec { FieldName = field, Type = EColumnType.Enum, EnumName = name, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = EColumnType.Enum, Role = role, EnumName = name, RawType = raw };
 			}
 
-			if (TryParseNamedType(raw, "ref", out string refSheet))
+			throw new SheetSchemaBuilderException($"시트 '{sheetName}' {columnIndex + 1}번째 열의 타입(1행)을 해석할 수 없습니다: '{raw}' ");
+		}
+
+
+		/// <summary>타입 문자열 끝의 (pk)/(fk)를 분리한다.</summary>
+		private static EColumnRole ParseRoleSuffix(ref string typeText)
+		{
+			string trimmed = typeText.Trim();
+
+			if (trimmed.EndsWith("(pk)", StringComparison.OrdinalIgnoreCase))
 			{
-				return new ColumnSpec { FieldName = field, Type = EColumnType.Ref, RefSheetName = refSheet, RawType = raw };
+				typeText = trimmed[..^4].Trim();
+				return EColumnRole.PrimaryKey;
 			}
-			else
+
+			if (trimmed.EndsWith("(fk)", StringComparison.OrdinalIgnoreCase))
 			{
-				throw new SheetSchemaBuilderException($"시트 '{sheetName}' {columnIndex + 1}번째 열의 타입(1행)을 해석할 수 없습니다: '{raw}' ");
+				typeText = trimmed[..^4].Trim();
+				return EColumnRole.ForeignKey;
 			}
+
+			typeText = trimmed;
+			return EColumnRole.None;
 		}
 		
 

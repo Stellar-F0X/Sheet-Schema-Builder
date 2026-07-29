@@ -47,6 +47,8 @@ publish/
 *.csproj
 !Source/Sheet-Schema-Builder.csproj
 !Source.Native/Sheet-Schema-Builder.Native.csproj
+!Tests/*.csproj
+!Tests/**/*.csproj
 *.unityproj
 *.sln
 *.suo
