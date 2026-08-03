@@ -153,7 +153,7 @@ namespace DataBuilder.Model
 			};
 		}
 
-		/// <summary>FK 컬럼을 같은 필드명의 PK 컬럼과 연결하고 관계를 검증한다.</summary>
+		/// <summary>FK/DK 컬럼을 같은 필드명의 PK 컬럼과 연결하고 관계를 검증한다.</summary>
 		public static void ResolveReferences(IReadOnlyList<SheetTable> tables)
 		{
 			Dictionary<string, List<(SheetTable Table, ColumnSpec Column)>> primaryKeysByField = new(StringComparer.OrdinalIgnoreCase);
@@ -177,34 +177,43 @@ namespace DataBuilder.Model
 
 			foreach (SheetTable table in tables)
 			{
-				foreach (ColumnSpec foreignKey in table.Columns.Where(c => c.Role == EColumnRole.ForeignKey))
+				foreach (ColumnSpec relationKey in table.Columns.Where(c => c.Role is EColumnRole.ForeignKey or EColumnRole.DataKey))
 				{
-					if (primaryKeysByField.TryGetValue(foreignKey.FieldName, out List<(SheetTable Table, ColumnSpec Column)>? targets) == false)
+					string roleName = relationKey.Role == EColumnRole.ForeignKey ? "FK" : "DK";
+					if (primaryKeysByField.TryGetValue(relationKey.FieldName, out List<(SheetTable Table, ColumnSpec Column)>? targets) == false)
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 FK '{foreignKey.FieldName}'와 같은 이름의 PK를 찾을 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 {roleName} '{relationKey.FieldName}'와 같은 이름의 PK를 찾을 수 없습니다.");
 					}
 
 					if (targets.Count > 1)
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 FK '{foreignKey.FieldName}'가 여러 시트의 PK와 일치합니다: {string.Join(", ", targets.Select(t => t.Table.Name))}");
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 {roleName} '{relationKey.FieldName}'가 여러 시트의 PK와 일치합니다: {string.Join(", ", targets.Select(t => t.Table.Name))}");
 					}
 
 					(SheetTable targetTable, ColumnSpec targetKey) = targets[0];
-					if (AreReferenceTypesCompatible(foreignKey, targetKey) == false)
+					if (AreReferenceTypesCompatible(relationKey, targetKey) == false)
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 FK '{foreignKey.FieldName}' 타입({foreignKey.RawType})이 대상 시트 '{targetTable.Name}'의 PK 타입({targetKey.RawType})과 일치하지 않습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{table.Name}'의 {roleName} '{relationKey.FieldName}' 타입({relationKey.RawType})이 대상 시트 '{targetTable.Name}'의 PK 타입({targetKey.RawType})과 일치하지 않습니다.");
 					}
 
-					foreignKey.RefSheetName = targetTable.Name;
+					relationKey.RefSheetName = targetTable.Name;
 				}
+			}
 
-				table.Hash = BuildHash(table.Name, table.Columns);
+			foreach (SheetTable table in tables)
+			{
+				string ownedDataSource = string.Concat(
+					tables.SelectMany(child => child.Columns
+					                                   .Where(c => c.Role == EColumnRole.DataKey &&
+					                                               string.Equals(c.RefSheetName, table.Name, StringComparison.OrdinalIgnoreCase))
+					                                   .Select(c => $"{child.Name}:{c.FieldName}")));
+				table.Hash = BuildHash(table.Name, table.Columns, ownedDataSource);
 			}
 		}
 
-		private static string BuildHash(string sheetName, IReadOnlyList<ColumnSpec> columns)
+		private static string BuildHash(string sheetName, IReadOnlyList<ColumnSpec> columns, string ownedDataSource = "")
 		{
-			string hashSource = sheetName + string.Concat(columns.Select(c => $"{c.RawType}:{c.FieldName}:{c.Type}:{c.Role}:{c.RefSheetName}:{c.EnumName}"));
+			string hashSource = sheetName + string.Concat(columns.Select(c => $"{c.RawType}:{c.FieldName}:{c.Type}:{c.Role}:{c.RefSheetName}:{c.EnumName}")) + ownedDataSource;
 			return HashUtility.Sha256Hex(hashSource);
 		}
 

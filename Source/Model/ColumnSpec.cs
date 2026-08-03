@@ -32,7 +32,7 @@ namespace DataBuilder.Model
 			init;
 		}
 
-		/// <summary>타입 뒤의 (pk)/(fk) 표식으로 지정한 컬럼 역할.</summary>
+		/// <summary>타입 뒤의 (pk)/(fk)/(dk) 표식으로 지정한 컬럼 역할.</summary>
 		public EColumnRole Role
 		{
 			get;
@@ -46,7 +46,7 @@ namespace DataBuilder.Model
 			init;
 		} = string.Empty;
 
-		/// <summary>Role == ForeignKey일 때 같은 필드명의 PK를 가진 참조 대상 시트 이름.</summary>
+		/// <summary>Role이 ForeignKey/DataKey일 때 같은 필드명의 PK를 가진 대상 시트 이름.</summary>
 		public string RefSheetName
 		{
 			get;
@@ -60,7 +60,7 @@ namespace DataBuilder.Model
 			init;
 		}
 
-		/// <summary>타입 문자열을 파싱한다. 기본 타입과 enum:이름, 선택적인 (pk)/(fk) 접미사를 지원한다.</summary>
+		/// <summary>타입 문자열을 파싱한다. 기본 타입과 enum:이름, 선택적인 (pk)/(fk)/(dk) 접미사를 지원한다.</summary>
 		public static ColumnSpec Parse(string sheetName, int columnIndex, string typeText, string fieldName)
 		{
 			string raw = typeText.Trim();
@@ -91,7 +91,7 @@ namespace DataBuilder.Model
 		}
 
 
-		/// <summary>타입 문자열 끝의 (pk)/(fk)를 분리한다.</summary>
+		/// <summary>타입 문자열 끝의 (pk)/(fk)/(dk)를 분리한다.</summary>
 		private static EColumnRole ParseRoleSuffix(ref string typeText)
 		{
 			string trimmed = typeText.Trim();
@@ -106,6 +106,12 @@ namespace DataBuilder.Model
 			{
 				typeText = trimmed[..^4].Trim();
 				return EColumnRole.ForeignKey;
+			}
+
+			if (trimmed.EndsWith("(dk)", StringComparison.OrdinalIgnoreCase))
+			{
+				typeText = trimmed[..^4].Trim();
+				return EColumnRole.DataKey;
 			}
 
 			typeText = trimmed;

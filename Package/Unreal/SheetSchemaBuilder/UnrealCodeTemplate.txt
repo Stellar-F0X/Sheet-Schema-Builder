@@ -57,6 +57,15 @@ const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
 }
 # END_TEMPLATE
 
+# TEMPLATE STRUCT_DATA_GETTER_BLOCK
+/// <summary>'{{CHILD_SHEET_NAME}}' 시트에서 이 행에 소속된 데이터를 돌려준다.</summary>
+template <typename TDatabase>
+const TArray<{{CHILD_STRUCT_NAME}}>& {{METHOD_NAME}}(TDatabase& Database) const
+{
+    return Database.{{DATABASE_GETTER}}({{PRIMARY_KEY_FIELD_NAME}});
+}
+# END_TEMPLATE
+
 # TEMPLATE DATABASE_FILE
 {{AUTO_GENERATED_HEADER}}
 #pragma once
@@ -65,7 +74,7 @@ const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
 {{STRUCT_INCLUDES}}
 #include "{{DATABASE_STRUCT_NAME}}.generated.h"
 
-/// <summary>모든 시트 데이터를 담는 데이터베이스. (pk)로 조회하고 (fk)로 연결된 행을 참조한다.</summary>
+/// <summary>모든 시트 데이터를 담는 데이터베이스. (pk)로 조회하고, (fk)로 참조하며, (dk)로 소속된 데이터 목록에 접근한다.</summary>
 USTRUCT(BlueprintType)
 struct {{DATABASE_STRUCT_NAME}}
 {
@@ -103,6 +112,33 @@ TArray<{{STRUCT_NAME}}> {{SHEET_NAME}};
 
 # TEMPLATE INDEX_FIELD_BLOCK
 TMap<{{KEY_TYPE}}, {{STRUCT_NAME}}> {{INDEX_FIELD_NAME}};
+# END_TEMPLATE
+
+# TEMPLATE DATA_INDEX_FIELD_BLOCK
+TMap<{{KEY_TYPE}}, TArray<{{CHILD_STRUCT_NAME}}>> {{INDEX_FIELD_NAME}};
+# END_TEMPLATE
+
+# TEMPLATE DATA_DATABASE_GETTER_BLOCK
+/// <summary>DK 값으로 소속된 행들을 가져온다.</summary>
+const TArray<{{CHILD_STRUCT_NAME}}>& {{METHOD_NAME}}({{KEY_PARAMETER_TYPE}} Key)
+{
+    BuildIndex();
+    if (const TArray<{{CHILD_STRUCT_NAME}}>* Rows = {{INDEX_FIELD_NAME}}.Find(Key))
+    {
+        return *Rows;
+    }
+
+    static const TArray<{{CHILD_STRUCT_NAME}}> EmptyRows;
+    return EmptyRows;
+}
+# END_TEMPLATE
+
+# TEMPLATE DATA_INDEX_BUILD_BLOCK
+{{INDEX_FIELD_NAME}}.Empty();
+for (const {{CHILD_STRUCT_NAME}}& Row : {{CHILD_SHEET_NAME}})
+{
+    {{INDEX_FIELD_NAME}}.FindOrAdd(Row.{{DATA_KEY_FIELD_NAME}}).Add(Row);
+}
 # END_TEMPLATE
 
 # TEMPLATE GETTER_BLOCK

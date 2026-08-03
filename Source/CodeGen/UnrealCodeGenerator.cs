@@ -12,11 +12,15 @@ namespace DataBuilder.CodeGen
 		private const string _STRUCT_FILE_TEMPLATE = "STRUCT_FILE";
 		private const string _PROPERTY_BLOCK_TEMPLATE = "PROPERTY_BLOCK";
 		private const string _STRUCT_REF_GETTER_BLOCK_TEMPLATE = "STRUCT_REF_GETTER_BLOCK";
+		private const string _STRUCT_DATA_GETTER_BLOCK_TEMPLATE = "STRUCT_DATA_GETTER_BLOCK";
 		private const string _DATABASE_FILE_TEMPLATE = "DATABASE_FILE";
 		private const string _SHEET_ARRAY_FIELD_TEMPLATE = "SHEET_ARRAY_FIELD";
 		private const string _INDEX_FIELD_BLOCK_TEMPLATE = "INDEX_FIELD_BLOCK";
 		private const string _GETTER_BLOCK_TEMPLATE = "GETTER_BLOCK";
 		private const string _INDEX_BUILD_BLOCK_TEMPLATE = "INDEX_BUILD_BLOCK";
+		private const string _DATA_INDEX_FIELD_BLOCK_TEMPLATE = "DATA_INDEX_FIELD_BLOCK";
+		private const string _DATA_DATABASE_GETTER_BLOCK_TEMPLATE = "DATA_DATABASE_GETTER_BLOCK";
+		private const string _DATA_INDEX_BUILD_BLOCK_TEMPLATE = "DATA_INDEX_BUILD_BLOCK";
 
 		/// <summary>Unreal 코드 생성에 필요한 설정과 시트 모델을 보관한다.</summary>
 		public UnrealCodeGenerator(BuilderConfig config, IReadOnlyList<SheetTable> tables, EnumRegistry enums, bool force) : base(
@@ -109,11 +113,17 @@ namespace DataBuilder.CodeGen
 			string propertyBlocks = string.Join(Environment.NewLine + Environment.NewLine, table.Columns.Select(CreatePropertyBlock));
 			IReadOnlyList<ColumnSpec> foreignKeys = table.Columns.Where(c => c.Role == EColumnRole.ForeignKey).ToList();
 			string refGetterBlocks = string.Join(Environment.NewLine + Environment.NewLine, foreignKeys.Select(CreateStructRefGetterBlock));
-			string memberBlocks = string.IsNullOrWhiteSpace(refGetterBlocks)
+			IReadOnlyList<(SheetTable ChildTable, ColumnSpec DataKey)> ownedData = OwnedDataOf(table);
+			string dataGetterBlocks = string.Join(Environment.NewLine + Environment.NewLine,
+			                                     ownedData.Select(relation => CreateStructDataGetterBlock(table, relation)));
+			string accessorBlocks = string.Join(Environment.NewLine + Environment.NewLine,
+			                                    new[] { refGetterBlocks, dataGetterBlocks }.Where(text => string.IsNullOrWhiteSpace(text) == false));
+			string memberBlocks = string.IsNullOrWhiteSpace(accessorBlocks)
 				? propertyBlocks
-				: propertyBlocks + Environment.NewLine + Environment.NewLine + refGetterBlocks;
+				: propertyBlocks + Environment.NewLine + Environment.NewLine + accessorBlocks;
 			string refForwardDeclarations = string.Join(Environment.NewLine,
 			                                           foreignKeys.Select(c => TablesByName[c.RefSheetName])
+			                                                      .Concat(ownedData.Select(relation => relation.ChildTable))
 			                                                      .Distinct()
 			                                                      .Select(target => $"struct {UnrealRowStructName(target)};"));
 
@@ -143,6 +153,17 @@ namespace DataBuilder.CodeGen
 			                       ("DATABASE_GETTER", "Get" + Identifier.Sanitize(target.Name)));
 		}
 
+		/// <summary>부모 행에서 DK로 소속된 자식 행 목록을 가져오는 helper를 만든다.</summary>
+		private string CreateStructDataGetterBlock(SheetTable parent, (SheetTable ChildTable, ColumnSpec DataKey) relation)
+		{
+			return Template.Render(_STRUCT_DATA_GETTER_BLOCK_TEMPLATE,
+			                       ("CHILD_SHEET_NAME", relation.ChildTable.Name),
+			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
+			                       ("METHOD_NAME", "Get" + Identifier.Sanitize(relation.ChildTable.Name)),
+			                       ("DATABASE_GETTER", DataGetterName(relation.ChildTable, relation.DataKey)),
+			                       ("PRIMARY_KEY_FIELD_NAME", parent.PrimaryKeyColumn!.FieldName));
+		}
+
 		/// <summary>UPROPERTY 필드 코드 블록을 만든다.</summary>
 		private string CreatePropertyBlock(ColumnSpec column)
 		{
@@ -154,11 +175,17 @@ namespace DataBuilder.CodeGen
 		private string GenerateDatabase()
 		{
 			IReadOnlyList<SheetTable> keyedTables = Tables.Where(t => t.PrimaryKeyColumn != null).ToList();
+			IReadOnlyList<(SheetTable ChildTable, ColumnSpec DataKey)> dataRelations = Tables
+				.SelectMany(table => table.Columns.Where(c => c.Role == EColumnRole.DataKey).Select(c => (ChildTable: table, DataKey: c)))
+				.ToList();
 			string structIncludes = string.Join(Environment.NewLine, Tables.Select(CreateStructInclude));
 			string sheetArrayFields = string.Join(Environment.NewLine + Environment.NewLine, Tables.Select(CreateSheetArrayField));
-			string indexFields = string.Join(Environment.NewLine      + Environment.NewLine, keyedTables.Select(CreateIndexFieldBlock));
-			string getterBlocks = string.Join(Environment.NewLine     + Environment.NewLine, keyedTables.Select(CreateGetterBlock));
-			string indexBuildBlocks = string.Join(Environment.NewLine + Environment.NewLine, keyedTables.Select(CreateIndexBuildBlock));
+			string indexFields = string.Join(Environment.NewLine + Environment.NewLine,
+			                                 keyedTables.Select(CreateIndexFieldBlock).Concat(dataRelations.Select(CreateDataIndexFieldBlock)));
+			string getterBlocks = string.Join(Environment.NewLine + Environment.NewLine,
+			                                  keyedTables.Select(CreateGetterBlock).Concat(dataRelations.Select(CreateDataDatabaseGetterBlock)));
+			string indexBuildBlocks = string.Join(Environment.NewLine + Environment.NewLine,
+			                                      keyedTables.Select(CreateIndexBuildBlock).Concat(dataRelations.Select(CreateDataIndexBuildBlock)));
 
 			return Template.Render
 			(
@@ -171,6 +198,51 @@ namespace DataBuilder.CodeGen
 				("GETTER_BLOCKS", Indent(getterBlocks, 4)),
 				("INDEX_BUILD_BLOCKS", Indent(indexBuildBlocks, 8))
 			);
+		}
+
+		private string CreateDataIndexFieldBlock((SheetTable ChildTable, ColumnSpec DataKey) relation)
+		{
+			return Template.Render(_DATA_INDEX_FIELD_BLOCK_TEMPLATE,
+			                       ("KEY_TYPE", UnrealTypeOf(relation.DataKey)),
+			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
+			                       ("INDEX_FIELD_NAME", DataIndexFieldName(relation.ChildTable, relation.DataKey)));
+		}
+
+		private string CreateDataDatabaseGetterBlock((SheetTable ChildTable, ColumnSpec DataKey) relation)
+		{
+			return Template.Render(_DATA_DATABASE_GETTER_BLOCK_TEMPLATE,
+			                       ("KEY_PARAMETER_TYPE", UnrealParameterTypeOf(relation.DataKey)),
+			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
+			                       ("METHOD_NAME", DataGetterName(relation.ChildTable, relation.DataKey)),
+			                       ("INDEX_FIELD_NAME", DataIndexFieldName(relation.ChildTable, relation.DataKey)));
+		}
+
+		private string CreateDataIndexBuildBlock((SheetTable ChildTable, ColumnSpec DataKey) relation)
+		{
+			return Template.Render(_DATA_INDEX_BUILD_BLOCK_TEMPLATE,
+			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
+			                       ("CHILD_SHEET_NAME", Identifier.Sanitize(relation.ChildTable.Name)),
+			                       ("DATA_KEY_FIELD_NAME", relation.DataKey.FieldName),
+			                       ("INDEX_FIELD_NAME", DataIndexFieldName(relation.ChildTable, relation.DataKey)));
+		}
+
+		private IReadOnlyList<(SheetTable ChildTable, ColumnSpec DataKey)> OwnedDataOf(SheetTable parent)
+		{
+			return Tables.SelectMany(table => table.Columns
+			                                       .Where(c => c.Role == EColumnRole.DataKey &&
+			                                                   string.Equals(c.RefSheetName, parent.Name, StringComparison.OrdinalIgnoreCase))
+			                                       .Select(c => (ChildTable: table, DataKey: c)))
+			             .ToList();
+		}
+
+		private static string DataGetterName(SheetTable childTable, ColumnSpec dataKey)
+		{
+			return "Get" + Identifier.Sanitize(childTable.Name) + "By" + Identifier.ToPascal(dataKey.FieldName);
+		}
+
+		private static string DataIndexFieldName(SheetTable childTable, ColumnSpec dataKey)
+		{
+			return Identifier.ToPascal(Identifier.Sanitize(childTable.Name)) + "By" + Identifier.ToPascal(dataKey.FieldName);
 		}
 
 		/// <summary>데이터베이스 헤더 기준의 행 구조체 헤더 include 줄을 만든다.</summary>

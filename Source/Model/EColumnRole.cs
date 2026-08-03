@@ -6,5 +6,6 @@ namespace DataBuilder.Model
 		None,
 		PrimaryKey,
 		ForeignKey,
+		DataKey,
 	}
 }

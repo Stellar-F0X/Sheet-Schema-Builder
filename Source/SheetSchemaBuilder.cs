@@ -155,7 +155,7 @@ namespace DataBuilder
 
 			BuilderLog.Output.WriteLine($"시트 {rawSheets.Count}개 로드: {string.Join(", ", rawSheets.Select(s => s.Name))}");
 
-			// 시트 구조(1행: 타입과 PK/FK, 2행: 필드명, 3행~: 데이터)를 해석하고 명시된 관계를 연결한다.
+			// 시트 구조(1행: 타입과 PK/FK/DK, 2행: 필드명, 3행~: 데이터)를 해석하고 명시된 관계를 연결한다.
 			List<SheetTable> tables = rawSheets.Select(SheetTable.Parse).ToList();
 			SheetTable.ResolveReferences(tables);
 			EnumRegistry enums = EnumRegistry.Build(tables);
@@ -165,7 +165,7 @@ namespace DataBuilder
 			BuilderLog.Output.WriteLine("코드 생성:");
 			CreateCodeGenerator(config, tables, enums, force).GenerateAll();
 
-			// 7~9. PK 중복과 FK 무결성을 검증하며 전체 데이터를 Json으로 저장한다.
+			// 7~9. PK 중복과 FK/DK 무결성을 검증하며 전체 데이터를 Json으로 저장한다.
 			new JsonExporter(tables, enums).Export(config.JsonOutputPath);
 
 			BuilderLog.Output.WriteLine();

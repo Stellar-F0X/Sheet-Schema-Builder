@@ -80,7 +80,7 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 
 1. `.ini`에 적힌 인증 정보로 Google Sheet에 접근해 모든(또는 지정한) 시트를 읽는다.
 2. 실행 Target에 따라 Unity용 C# 구조체 또는 Unreal용 C++ `USTRUCT` 헤더를 생성한다.
-3. 명시된 PK/FK 관계를 해석하고, PK가 있는 시트의 조회 인덱스를 가진 데이터베이스 타입을 생성한다.
+3. 명시된 PK/FK/DK 관계를 해석하고, PK 조회 및 DK 소속 데이터 인덱스를 가진 데이터베이스 타입을 생성한다.
 4. 전체 시트 데이터를 생성된 데이터베이스 타입에 맞는 Json으로 저장한다. 
 
 ### 해시 기반 재생성 스킵
@@ -93,7 +93,7 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 
 | 행 | 내용 | 예 |
 |---|---|---|
-| 1행 | 각 열의 데이터 타입과 선택적인 키 역할 | `int(pk)`, `int(fk)`, `float`, `enum:ItemType` |
+| 1행 | 각 열의 데이터 타입과 선택적인 키 역할 | `int(pk)`, `int(fk)`, `int(dk)`, `float` |
 | 2행 | 필드명 | `id`, `name`, `price` |
 | 3행~ | 데이터 | `1`, `Wooden Sword`, `100` |
 
@@ -106,15 +106,17 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 - `enum:이름`: 열 데이터에 등장한 값들로 enum이 자동 생성됩니다. <br>
   생성 타입명에는 `E` 접두사가 붙습니다. (예: `enum:ItemType` → `EItemType`)
 
-### PK/FK로 시트 연결
+### PK/FK/DK로 시트 연결
 
 - `자료형(pk)`: 해당 열을 시트의 PK로 지정합니다. 예: `int(pk)`, `string(pk)`, `enum:ItemType(pk)`
 - `자료형(fk)`: 해당 열을 FK로 지정합니다. 예: `int(fk)`, `string(fk)`
+- `자료형(dk)`: 해당 열을 데이터 소속 키로 지정합니다. 같은 이름의 PK 행에서 이 시트의 소속 데이터 목록에 접근할 수 있습니다.
 - PK는 시트마다 0개 또는 1개만 허용됩니다. 2개 이상이면 오류입니다.
 - PK 값은 해당 시트 안에서 비어 있거나 중복될 수 없습니다.
-- FK는 **필드명이 같은 PK**를 가진 시트에 연결됩니다. 일치하는 PK가 없거나 둘 이상이면 오류입니다.
-- FK와 대상 PK의 자료형은 같아야 하며, 모든 FK 값은 대상 PK에 실제로 존재해야 합니다.
-- FK 값은 반복될 수 있습니다. 또한 서로 다른 PK/FK 열이나 시트에서 같은 값(예: `0`)을 사용하는 것도 허용됩니다.
+- FK와 DK는 **필드명이 같은 PK**를 가진 시트에 연결됩니다. 일치하는 PK가 없거나 둘 이상이면 오류입니다.
+- FK/DK와 대상 PK의 자료형은 같아야 하며, 모든 FK/DK 값은 대상 PK에 실제로 존재해야 합니다.
+- FK/DK 값은 반복될 수 있습니다. 또한 서로 다른 PK/FK/DK 열이나 시트에서 같은 값(예: `0`)을 사용하는 것도 허용됩니다.
+- DK 값은 여러 자식 행에서 반복될 수 있으며, 부모 PK 행에서는 해당 DK 값을 가진 모든 자식 행을 목록으로 조회합니다.
 - `(pk)`가 없는 시트도 유효하며 배열 데이터는 생성되지만, 해당 시트의 `Get...`/`TryGet...` PK 조회기는 생성되지 않습니다.
 
 예를 들어 `Stage` 시트의 `Stage_ID`가 `int(pk)`이면, 아래 `Mine_Stat` 시트의 같은 이름인 `Stage_ID` `int(fk)`가 `Stage`를 참조합니다. PK가 첫 번째 열일 필요는 없습니다.
@@ -126,6 +128,8 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 | 0 | 0 | 1 | 31201 | 0.3 |
 
 위 데이터에서 일반 첫 열 `Group`의 중복과 첫 행의 `Stage_ID == Mine_Stat_ID == 0`은 모두 허용됩니다.
+
+`Flag_Stats.Flag_ID`가 `int(dk)`이고 `Flag.Flag_ID`가 `int(pk)`이면, 생성된 `Flag` 행 구조체에서 자신에게 소속된 모든 `Flag_Stats` 행에 접근할 수 있습니다.
 
 
 ## .ini 설정
@@ -180,6 +184,7 @@ SheetDataBase db = SheetDataBase.FromJson(json);
 
 SItemRow item = db.GetItem(3);                  // Item 시트의 명시적 PK로 조회
 SMonsterRow monster = item.GetMonster_ID(db);   // 명시적 FK로 연결된 행 조회
+IReadOnlyList<SFlag_StatsRow> stats = flag.GetFlag_Stats(db); // DK로 소속된 행 조회
 SItemRow[] allItems = db.Item;                  // 시트 전체 배열
 ```
 
@@ -204,7 +209,7 @@ Source/
   Sheets/                        Google Sheets REST v4 / 서비스 계정 JWT / 로컬 .tsv
   Model/                         시트 구조 해석 (타입·필드·데이터·해시), enum 수집
   CodeGen/                       Unity / Unreal 코드 제네레이션
-  Export/                        Json 저장 + PK 중복/FK 무결성 검증
+  Export/                        Json 저장 + PK 중복/FK·DK 무결성 검증
 Source.Native/
   Sheet-Schema-Builder.Native.csproj
   NativeExports.cs               Unreal C++ 모듈이 호출하는 NativeAOT export

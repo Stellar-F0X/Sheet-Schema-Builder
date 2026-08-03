@@ -70,7 +70,7 @@ namespace DataBuilder.Export
 		private void ValidateSchemaData()
 		{
 			CollectPrimaryKeys();
-			ValidateForeignKeys();
+			ValidateRelationKeys();
 		}
 
 
@@ -103,29 +103,30 @@ namespace DataBuilder.Export
 		}
 
 
-		/// <summary>모든 FK 값이 연결된 대상 시트의 PK에 존재하는지 검증한다.</summary>
-		private void ValidateForeignKeys()
+		/// <summary>모든 FK/DK 값이 연결된 대상 시트의 PK에 존재하는지 검증한다.</summary>
+		private void ValidateRelationKeys()
 		{
 			foreach (SheetTable table in _tables)
 			{
 				for (int c = 0; c < table.Columns.Count; c++)
 				{
-					ColumnSpec foreignKey = table.Columns[c];
-					if (foreignKey.Role != EColumnRole.ForeignKey)
+					ColumnSpec relationKey = table.Columns[c];
+					if (relationKey.Role is not (EColumnRole.ForeignKey or EColumnRole.DataKey))
 					{
 						continue;
 					}
 
-					SheetTable target = _tablesByName[foreignKey.RefSheetName];
+					string roleName = relationKey.Role == EColumnRole.ForeignKey ? "FK" : "DK";
+					SheetTable target = _tablesByName[relationKey.RefSheetName];
 					HashSet<string> targetKeys = _primaryKeySets[target.Name];
 
 					for (int r = 0; r < table.Rows.Count; r++)
 					{
 						string cell = table.Rows[r][c];
-						string key = NormalizeKey(foreignKey, cell, table.Name, r);
+						string key = NormalizeKey(relationKey, cell, table.Name, r);
 						if (targetKeys.Contains(key) == false)
 						{
-							throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행의 FK '{foreignKey.FieldName}' 값 '{cell}'이 대상 시트 '{target.Name}'의 PK에 없습니다.");
+							throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행의 {roleName} '{relationKey.FieldName}' 값 '{cell}'이 대상 시트 '{target.Name}'의 PK에 없습니다.");
 						}
 					}
 				}
@@ -147,7 +148,7 @@ namespace DataBuilder.Export
 		}
 
 
-		/// <summary>PK/FK 비교가 생성 코드의 키 비교와 같도록 셀 값을 선언 타입으로 정규화한다.</summary>
+		/// <summary>PK/FK/DK 비교가 생성 코드의 키 비교와 같도록 셀 값을 선언 타입으로 정규화한다.</summary>
 		private string NormalizeKey(ColumnSpec column, string cell, string sheetName, int rowIndex)
 		{
 			if (string.IsNullOrWhiteSpace(cell))
