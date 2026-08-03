@@ -29,22 +29,22 @@ namespace DataBuilder.CodeGen
 		/// <summary>enum, 시트 구조체, 데이터베이스 구조체 헤더를 모두 생성한다.</summary>
 		public override void GenerateAll()
 		{
-			Directory.CreateDirectory(Config.StructOutputDirectory);
-			Directory.CreateDirectory(Config.DatabaseOutputDirectory);
+			Directory.CreateDirectory(Config.StructDirectory);
+			Directory.CreateDirectory(Config.OutputDirectory);
 
 			if (Enums.IsEmpty == false)
 			{
-				string enumPath = Path.Combine(Config.StructOutputDirectory, "SheetEnums.h");
+				string enumPath = Path.Combine(Config.StructDirectory, "SheetEnums.h");
 				Report(enumPath, WriteFile(enumPath, EnumsHash(), GenerateEnums));
 			}
 
 			foreach (SheetTable table in Tables)
 			{
-				string structPath = Path.Combine(Config.StructOutputDirectory, UnrealRowStructName(table) + ".h");
+				string structPath = Path.Combine(Config.StructDirectory, UnrealRowStructName(table) + ".h");
 				Report(structPath, WriteFile(structPath, table.Hash, () => GenerateStruct(table)));
 			}
 
-			string databasePath = Path.Combine(Config.DatabaseOutputDirectory, UnrealDatabaseStructName() + ".h");
+			string databasePath = Path.Combine(Config.OutputDirectory, UnrealDatabaseStructName() + ".h");
 			Report(databasePath, WriteFile(databasePath, DatabaseHash(), GenerateDatabase));
 		}
 
@@ -248,8 +248,8 @@ namespace DataBuilder.CodeGen
 		/// <summary>데이터베이스 헤더 기준의 행 구조체 헤더 include 줄을 만든다.</summary>
 		private string CreateStructInclude(SheetTable table)
 		{
-			string headerPath = Path.Combine(Config.StructOutputDirectory, UnrealRowStructName(table) + ".h");
-			string includePath = Path.GetRelativePath(Config.DatabaseOutputDirectory, headerPath).Replace('\\', '/');
+			string headerPath = Path.Combine(Config.StructDirectory, UnrealRowStructName(table) + ".h");
+			string includePath = Path.GetRelativePath(Config.OutputDirectory, headerPath).Replace(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 			return $"#include \"{includePath}\"";
 		}
 

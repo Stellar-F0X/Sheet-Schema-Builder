@@ -85,6 +85,8 @@ Unreal Python 환경에서 Tkinter가 제공되지 않는 경우 GUI 창을 열 
 
 ### 해시 기반 재생성 스킵
 
+Unity 생성 코드 파일은 **.generated.cs** 이름으로 저장됩니다.
+
 생성되는 모든 파일의 **첫 줄**에는 `// SheetHash: ...` 주석이 달립니다. <br>
 해시는 `SHA256(시트이름 + 1행 타입들 + 2행 필드명들)`이며, 대상 경로에 **같은 해시의 파일이 이미 있으면 <br>
 생성하지 않고 그 파일을 그대로 사용**합니다. 데이터베이스 타입은 모든 시트 해시를 합쳐 다시 해시합니다. <br>
@@ -151,8 +153,7 @@ Sheets =                         ; 비우면 전체 시트
 Target = Unity                    ; CLI/수동 실행용. 엔진 에디터에서는 각 엔진 값으로 강제됨.
 Namespace = BS.Data
 DatabaseClassName = SheetDataBase
-DatabaseOutputDirectory = ./Assets/Generated/Database
-StructOutputDirectory = ./Assets/Generated/Database/Structs
+OutputDirectory = ./Assets/Generated/Database  ; 구조체 코드는 이 경로 아래 Structs 폴더에 생성됨
 
 [Json]
 OutputPath = ./Assets/StreamingAssets/SheetDataBase.json

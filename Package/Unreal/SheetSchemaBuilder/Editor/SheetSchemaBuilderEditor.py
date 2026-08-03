@@ -43,8 +43,7 @@ class CodeGenSettings:
     target: str = TARGET_NAME
     namespace: str = "BS.Data"
     database_class_name: str = "SheetDataBase"
-    database_output_directory: str = "./Generated/Database"
-    struct_output_directory: str = "./Generated/Database/Structs"
+    output_directory: str = "./Generated/Database"
 
 
 @dataclass
@@ -105,10 +104,8 @@ class BuilderIniSettings:
                 self.code_gen.namespace = value
             elif key == "DatabaseClassName":
                 self.code_gen.database_class_name = value
-            elif key == "DatabaseOutputDirectory":
-                self.code_gen.database_output_directory = value
-            elif key == "StructOutputDirectory":
-                self.code_gen.struct_output_directory = value
+            elif key in ("OutputDirectory", "DatabaseOutputDirectory"):
+                self.code_gen.output_directory = value
         elif section == "Json" and key == "OutputPath":
             self.json.output_path = value
 
@@ -128,8 +125,7 @@ class BuilderIniSettings:
             f"Target = {self.code_gen.target}",
             f"Namespace = {self.code_gen.namespace}",
             f"DatabaseClassName = {self.code_gen.database_class_name}",
-            f"DatabaseOutputDirectory = {self.code_gen.database_output_directory}",
-            f"StructOutputDirectory = {self.code_gen.struct_output_directory}",
+            f"OutputDirectory = {self.code_gen.output_directory}",
             "",
             "[Json]",
             f"OutputPath = {self.json.output_path}",
@@ -377,8 +373,8 @@ class SheetSchemaBuilderWindow:
         self.add_section(container, "Code Generation")
         self.add_entry_row(container, "code_gen", "namespace", "Namespace")
         self.add_entry_row(container, "code_gen", "database_class_name", "Database Class Name")
-        self.add_entry_row(container, "code_gen", "database_output_directory", "Database Output Directory", browse="directory")
-        self.add_entry_row(container, "code_gen", "struct_output_directory", "Struct Output Directory", browse="directory")
+        self.add_entry_row(container, "code_gen", "output_directory", "Output Directory", browse="directory")
+        self.ttk.Label(container, text="Struct code is generated in the Structs subdirectory.").pack(anchor="w", padx=(154, 0))
 
         self.add_section(container, "Json")
         self.add_entry_row(container, "json", "output_path", "Output Path", browse="file")

@@ -32,22 +32,22 @@ namespace DataBuilder.CodeGen
 		/// <summary>enum, 시트 구조체, 데이터베이스 클래스를 모두 생성한다.</summary>
 		public override void GenerateAll()
 		{
-			Directory.CreateDirectory(Config.StructOutputDirectory);
-			Directory.CreateDirectory(Config.DatabaseOutputDirectory);
+			Directory.CreateDirectory(Config.StructDirectory);
+			Directory.CreateDirectory(Config.OutputDirectory);
 
 			if (Enums.IsEmpty == false)
 			{
-				string enumPath = Path.Combine(Config.StructOutputDirectory, "SheetEnums.g.cs");
+				string enumPath = Path.Combine(Config.StructDirectory, "SheetEnums.generated.cs");
 				Report(enumPath, WriteFile(enumPath, EnumsHash(), GenerateEnums));
 			}
 
 			foreach (SheetTable table in Tables)
 			{
-				string structPath = Path.Combine(Config.StructOutputDirectory, table.StructName + ".g.cs");
+				string structPath = Path.Combine(Config.StructDirectory, table.StructName + ".generated.cs");
 				Report(structPath, WriteFile(structPath, table.Hash, () => GenerateStruct(table)));
 			}
 
-			string databasePath = Path.Combine(Config.DatabaseOutputDirectory, Config.DatabaseClassName + ".g.cs");
+			string databasePath = Path.Combine(Config.OutputDirectory, Config.DatabaseClassName + ".generated.cs");
 			Report(databasePath, WriteFile(databasePath, DatabaseHash(), GenerateDatabase));
 		}
 

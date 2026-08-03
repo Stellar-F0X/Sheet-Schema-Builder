@@ -78,18 +78,17 @@ namespace DataBuilder.Configuration
 			init;
 		}
 
-		/// <summary>SheetDataBase 클래스가 생성될 디렉터리.</summary>
-		public required string DatabaseOutputDirectory
+		/// <summary>생성 코드가 저장될 루트 디렉터리.</summary>
+		public required string OutputDirectory
 		{
 			get;
 			init;
 		}
 
 		/// <summary>시트별 구조체가 생성될 디렉터리.</summary>
-		public required string StructOutputDirectory
+		public string StructDirectory
 		{
-			get;
-			init;
+			get => Path.Combine(OutputDirectory, "Structs");
 		}
 
 		/// <summary>전체 데이터가 저장될 Json 파일 경로.</summary>
@@ -130,12 +129,20 @@ namespace DataBuilder.Configuration
 
 			string[] sheetFilter = ini.Get("GoogleSheet", "Sheets").Split(',').Select(sheet => sheet.Trim()).Where(sheet => sheet.Length > 0).ToArray();
 
-			string databaseDir = ResolvePath(baseDir, ini.GetRequired("CodeGen", "DatabaseOutputDirectory"));
-			string structDir = ini.Get("CodeGen", "StructOutputDirectory");
+			string outputDirectory = ini.Get("CodeGen", "OutputDirectory");
+			if (string.IsNullOrWhiteSpace(outputDirectory))
+			{
+				// 기존 설정 파일은 처음 저장하기 전에도 계속 사용할 수 있게 한다.
+				outputDirectory = ini.Get("CodeGen", "DatabaseOutputDirectory");
+			}
+
+			if (string.IsNullOrWhiteSpace(outputDirectory))
+			{
+				throw new SheetSchemaBuilderException(".ini에 [CodeGen] OutputDirectory 값이 필요합니다.");
+			}
 
 			BuilderConfig config = new BuilderConfig
 			{
-				StructOutputDirectory = string.IsNullOrWhiteSpace(structDir) ? Path.Combine(databaseDir, "Structs") : ResolvePath(baseDir, structDir),
 				ServiceAccountJsonPath = ResolvePath(baseDir, ini.Get("GoogleSheet", "ServiceAccountJsonPath")),
 				DatabaseClassName = ini.Get("CodeGen", "DatabaseClassName", "SheetDataBase"),
 				LocalDirectory = ResolvePath(baseDir, ini.Get("GoogleSheet", "LocalDirectory")),
@@ -143,7 +150,7 @@ namespace DataBuilder.Configuration
 				Namespace = ini.Get("CodeGen", "Namespace", "SheetData"),
 				SpreadsheetId = ini.Get("GoogleSheet", "SpreadsheetId"),
 				ApiKey = ini.Get("GoogleSheet", "ApiKey"),
-				DatabaseOutputDirectory = databaseDir,
+				OutputDirectory = ResolvePath(baseDir, outputDirectory),
 				CodeGenTarget = codeGenTarget,
 				SheetFilter = sheetFilter,
 				AuthMode = authMode,

@@ -198,8 +198,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 EditorGUILayout.LabelField("Code Generation", EditorStyles.boldLabel);
                 _settings.CodeGen.Namespace = EditorGUILayout.TextField("Namespace", _settings.CodeGen.Namespace);
                 _settings.CodeGen.DatabaseClassName = EditorGUILayout.TextField("Database Class Name", _settings.CodeGen.DatabaseClassName);
-                DrawPathField("Database Output Directory", ref _settings.CodeGen.DatabaseOutputDirectory, true, string.Empty);
-                DrawPathField("Struct Output Directory", ref _settings.CodeGen.StructOutputDirectory, true, string.Empty);
+                DrawPathField("Output Directory", ref _settings.CodeGen.OutputDirectory, true, string.Empty);
+                EditorGUILayout.HelpBox("Struct code is generated in the Structs subdirectory.", MessageType.None);
 
                 EditorGUILayout.Space(12);
                 EditorGUILayout.LabelField("Json", EditorStyles.boldLabel);
@@ -385,8 +385,8 @@ namespace SheetSchemaBuilder.UnityEditorTools
                 settings.CodeGen.Target = target;
                 settings.CodeGen.Namespace = IniFile.Get(ini, "CodeGen", "Namespace", settings.CodeGen.Namespace);
                 settings.CodeGen.DatabaseClassName = IniFile.Get(ini, "CodeGen", "DatabaseClassName", settings.CodeGen.DatabaseClassName);
-                settings.CodeGen.DatabaseOutputDirectory = IniFile.Get(ini, "CodeGen", "DatabaseOutputDirectory", settings.CodeGen.DatabaseOutputDirectory);
-                settings.CodeGen.StructOutputDirectory = IniFile.Get(ini, "CodeGen", "StructOutputDirectory", settings.CodeGen.StructOutputDirectory);
+                settings.CodeGen.OutputDirectory = IniFile.Get(ini, "CodeGen", "OutputDirectory",
+                    IniFile.Get(ini, "CodeGen", "DatabaseOutputDirectory", settings.CodeGen.OutputDirectory));
                 settings.Json.OutputPath = IniFile.Get(ini, "Json", "OutputPath", settings.Json.OutputPath);
                 return settings;
             }
@@ -426,8 +426,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     "Target = " + CodeGen.Target,
                     "Namespace = " + CodeGen.Namespace,
                     "DatabaseClassName = " + CodeGen.DatabaseClassName,
-                    "DatabaseOutputDirectory = " + CodeGen.DatabaseOutputDirectory,
-                    "StructOutputDirectory = " + CodeGen.StructOutputDirectory,
+                    "OutputDirectory = " + CodeGen.OutputDirectory,
                     string.Empty,
                     "[Json]",
                     "OutputPath = " + Json.OutputPath,
@@ -469,8 +468,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
             public string Target;
             public string Namespace;
             public string DatabaseClassName;
-            public string DatabaseOutputDirectory;
-            public string StructOutputDirectory;
+            public string OutputDirectory;
 
             public static CodeGenSettings CreateDefault(string target)
             {
@@ -479,8 +477,7 @@ namespace SheetSchemaBuilder.UnityEditorTools
                     Target = target,
                     Namespace = "BS.Data",
                     DatabaseClassName = "SheetDataBase",
-                    DatabaseOutputDirectory = "./Assets/Generated/Database",
-                    StructOutputDirectory = "./Assets/Generated/Database/Structs"
+                    OutputDirectory = "./Assets/Generated/Database"
                 };
             }
         }
