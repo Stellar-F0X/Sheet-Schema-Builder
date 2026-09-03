@@ -57,6 +57,22 @@ const {{TARGET_STRUCT_NAME}}& {{METHOD_NAME}}(TDatabase& Database) const
 }
 # END_TEMPLATE
 
+# TEMPLATE STRUCT_LIST_REF_GETTER_BLOCK
+/// <summary>{{FIELD_NAME}} {{ROLE_NAME}} 목록이 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행들을 돌려준다.</summary>
+template <typename TDatabase>
+TArray<const {{TARGET_STRUCT_NAME}}*> {{METHOD_NAME}}(TDatabase& Database) const
+{
+    TArray<const {{TARGET_STRUCT_NAME}}*> Rows;
+    Rows.Reserve({{FIELD_NAME}}.Num());
+    for (const auto& Key : {{FIELD_NAME}})
+    {
+        Rows.Add(&Database.{{DATABASE_GETTER}}(Key));
+    }
+
+    return Rows;
+}
+# END_TEMPLATE
+
 # TEMPLATE STRUCT_DATA_GETTER_BLOCK
 /// <summary>'{{CHILD_SHEET_NAME}}' 시트에서 이 행에 소속된 데이터를 돌려준다.</summary>
 template <typename TDatabase>
@@ -138,6 +154,17 @@ const TArray<{{CHILD_STRUCT_NAME}}>& {{METHOD_NAME}}({{KEY_PARAMETER_TYPE}} Key)
 for (const {{CHILD_STRUCT_NAME}}& Row : {{CHILD_SHEET_NAME}})
 {
     {{INDEX_FIELD_NAME}}.FindOrAdd(Row.{{DATA_KEY_FIELD_NAME}}).Add(Row);
+}
+# END_TEMPLATE
+
+# TEMPLATE DATA_LIST_INDEX_BUILD_BLOCK
+{{INDEX_FIELD_NAME}}.Empty();
+for (const {{CHILD_STRUCT_NAME}}& Row : {{CHILD_SHEET_NAME}})
+{
+    for (const auto& Key : Row.{{DATA_KEY_FIELD_NAME}})
+    {
+        {{INDEX_FIELD_NAME}}.FindOrAdd(Key).Add(Row);
+    }
 }
 # END_TEMPLATE
 

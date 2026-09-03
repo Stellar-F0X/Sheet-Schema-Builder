@@ -123,10 +123,14 @@ namespace DataBuilder.Export
 					for (int r = 0; r < table.Rows.Count; r++)
 					{
 						string cell = table.Rows[r][c];
-						string key = NormalizeKey(relationKey, cell, table.Name, r);
-						if (targetKeys.Contains(key) == false)
+						IReadOnlyList<string> values = relationKey.IsList ? ParseListCell(relationKey, cell, table.Name, r) : new[] { cell };
+						foreach (string value in values)
 						{
-							throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행의 {roleName} '{relationKey.FieldName}' 값 '{cell}'이 대상 시트 '{target.Name}'의 PK에 없습니다.");
+							string key = NormalizeKey(relationKey, value, table.Name, r);
+							if (targetKeys.Contains(key) == false)
+							{
+								throw new SheetSchemaBuilderException($"시트 '{table.Name}' {r + 3}행의 {roleName} '{relationKey.FieldName}' 값 '{value}'이 대상 시트 '{target.Name}'의 PK에 없습니다.");
+							}
 						}
 					}
 				}
@@ -205,6 +209,23 @@ namespace DataBuilder.Export
 			ColumnSpec column = table.Columns[columnIndex];
 			string cell = table.Rows[rowIndex][columnIndex];
 			writer.WritePropertyName(column.FieldName);
+			if (column.IsList)
+			{
+				writer.WriteStartArray();
+				foreach (string value in ParseListCell(column, cell, table.Name, rowIndex))
+				{
+					WriteScalarValue(writer, column, value, table.Name, rowIndex);
+				}
+				writer.WriteEndArray();
+				return;
+			}
+
+			WriteScalarValue(writer, column, cell, table.Name, rowIndex);
+		}
+
+
+		private void WriteScalarValue(Utf8JsonWriter writer, ColumnSpec column, string cell, string sheetName, int rowIndex)
+		{
 
 			switch (column.Type)
 			{
@@ -216,7 +237,7 @@ namespace DataBuilder.Export
 					}
 					else
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Int32)}(으)로 해석할 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Int32)}(으)로 해석할 수 없습니다.");
 					}
 
 					break;
@@ -230,7 +251,7 @@ namespace DataBuilder.Export
 					}
 					else
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Int64)}(으)로 해석할 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Int64)}(으)로 해석할 수 없습니다.");
 					}
 
 					break;
@@ -244,7 +265,7 @@ namespace DataBuilder.Export
 					}
 					else
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Single)}(으)로 해석할 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Single)}(으)로 해석할 수 없습니다.");
 					}
 
 					break;
@@ -258,7 +279,7 @@ namespace DataBuilder.Export
 					}
 					else
 					{
-						throw new SheetSchemaBuilderException($"시트 '{table.Name}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Double)}(으)로 해석할 수 없습니다.");
+						throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: '{cell}' 값을 {typeof(Double)}(으)로 해석할 수 없습니다.");
 					}
 
 					break;
@@ -287,6 +308,24 @@ namespace DataBuilder.Export
 					throw new SheetSchemaBuilderException($"지원하지 않는 컬럼 타입입니다: {column.Type}");
 				}
 			}
+		}
+
+
+		/// <summary>List&lt;타입&gt; 셀을 쉼표 단위로 나눈다. 빈 셀은 빈 목록이며 중간의 빈 원소는 오류다.</summary>
+		private static IReadOnlyList<string> ParseListCell(ColumnSpec column, string cell, string sheetName, int rowIndex)
+		{
+			if (string.IsNullOrWhiteSpace(cell))
+			{
+				return Array.Empty<string>();
+			}
+
+			string[] values = cell.Split(',').Select(value => value.Trim()).ToArray();
+			if (values.Any(value => value.Length == 0))
+			{
+				throw new SheetSchemaBuilderException($"시트 '{sheetName}' {rowIndex + 3}행 '{column.FieldName}' 컬럼: 리스트 값 '{cell}'에 빈 원소가 있습니다.");
+			}
+
+			return values;
 		}
 
 

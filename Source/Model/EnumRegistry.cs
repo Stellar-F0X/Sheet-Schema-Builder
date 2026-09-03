@@ -40,13 +40,41 @@ namespace DataBuilder.Model
 
                     foreach (IReadOnlyList<string> item in table.Rows)
                     {
-                        registry.Register(column.EnumName, item[col]);
+                        if (column.IsList)
+                        {
+                            foreach (string value in SplitListCell(item[col]))
+                            {
+                                registry.Register(column.EnumName, value);
+                            }
+                        }
+                        else
+                        {
+                            registry.Register(column.EnumName, item[col]);
+                        }
                     }
                 }
             }
 
             return registry;
         }
+
+
+	    private static IEnumerable<string> SplitListCell(string cell)
+	    {
+	        if (string.IsNullOrWhiteSpace(cell))
+	        {
+	            yield break;
+	        }
+
+	        foreach (string item in cell.Split(','))
+	        {
+	            string value = item.Trim();
+	            if (value.Length > 0)
+	            {
+	                yield return value;
+	            }
+	        }
+	    }
         
 
         /// <summary>enum 멤버를 중복 없이 등록한다.</summary>

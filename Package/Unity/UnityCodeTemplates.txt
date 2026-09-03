@@ -44,6 +44,25 @@ public {{TARGET_STRUCT_NAME}} {{METHOD_NAME}}({{DATABASE_CLASS_NAME}} database)
 }
 # END_TEMPLATE
 
+# TEMPLATE LIST_REF_GETTER_BLOCK
+/// <summary>{{FIELD_NAME}} {{ROLE_NAME}} 목록이 가리키는 '{{TARGET_SHEET_NAME}}' 시트의 행들을 돌려준다.</summary>
+public IReadOnlyList<{{TARGET_STRUCT_NAME}}> {{METHOD_NAME}}({{DATABASE_CLASS_NAME}} database)
+{
+    if (this.{{FIELD_NAME}} == null || this.{{FIELD_NAME}}.Count == 0)
+    {
+        return Array.Empty<{{TARGET_STRUCT_NAME}}>();
+    }
+
+    List<{{TARGET_STRUCT_NAME}}> rows = new List<{{TARGET_STRUCT_NAME}}>(this.{{FIELD_NAME}}.Count);
+    for (int i = 0; i < this.{{FIELD_NAME}}.Count; i++)
+    {
+        rows.Add(database.{{DATABASE_GETTER}}(this.{{FIELD_NAME}}[i]));
+    }
+
+    return rows;
+}
+# END_TEMPLATE
+
 # TEMPLATE DATA_GETTER_BLOCK
 /// <summary>'{{CHILD_SHEET_NAME}}' 시트에서 이 행에 소속된 데이터를 돌려준다.</summary>
 public IReadOnlyList<{{CHILD_STRUCT_NAME}}> {{METHOD_NAME}}({{DATABASE_CLASS_NAME}} database)
@@ -154,6 +173,31 @@ for (int i = 0; i < {{CHILD_SHEET_NAME}}.Length; i++)
     }
 
     rows.Add(row);
+}
+# END_TEMPLATE
+
+# TEMPLATE DATA_LIST_INDEX_BUILD_BLOCK
+{{INDEX_FIELD_NAME}} = new Dictionary<{{KEY_TYPE}}, List<{{CHILD_STRUCT_NAME}}>>({{CHILD_SHEET_NAME}}.Length);
+for (int i = 0; i < {{CHILD_SHEET_NAME}}.Length; i++)
+{
+    {{CHILD_STRUCT_NAME}} row = {{CHILD_SHEET_NAME}}[i];
+    if (row.{{DATA_KEY_FIELD_NAME}} == null)
+    {
+        continue;
+    }
+
+    for (int keyIndex = 0; keyIndex < row.{{DATA_KEY_FIELD_NAME}}.Count; keyIndex++)
+    {
+        {{KEY_TYPE}} key = row.{{DATA_KEY_FIELD_NAME}}[keyIndex];
+        List<{{CHILD_STRUCT_NAME}}> rows;
+        if ({{INDEX_FIELD_NAME}}.TryGetValue(key, out rows) == false)
+        {
+            rows = new List<{{CHILD_STRUCT_NAME}}>();
+            {{INDEX_FIELD_NAME}}[key] = rows;
+        }
+
+        rows.Add(row);
+    }
 }
 # END_TEMPLATE
 

@@ -122,6 +122,11 @@ namespace DataBuilder.Model
 				throw new SheetSchemaBuilderException($"시트 '{raw.Name}'의 PK '{primaryKeys[0].FieldName}'는 int/long/float/double/string/enum 타입이어야 합니다. (현재: {primaryKeys[0].RawType})");
 			}
 
+			if (primaryKeys.Count == 1 && primaryKeys[0].IsList)
+			{
+				throw new SheetSchemaBuilderException($"시트 '{raw.Name}'의 PK '{primaryKeys[0].FieldName}'에는 List<타입>을 사용할 수 없습니다. (현재: {primaryKeys[0].RawType})");
+			}
+
 			List<IReadOnlyList<string>> rows = new List<IReadOnlyList<string>>();
 			
 			for (int r = 2; r < raw.Rows.Count; r++)
@@ -213,7 +218,7 @@ namespace DataBuilder.Model
 
 		private static string BuildHash(string sheetName, IReadOnlyList<ColumnSpec> columns, string ownedDataSource = "")
 		{
-			string hashSource = sheetName + string.Concat(columns.Select(c => $"{c.RawType}:{c.FieldName}:{c.Type}:{c.Role}:{c.RefSheetName}:{c.EnumName}")) + ownedDataSource;
+			string hashSource = sheetName + string.Concat(columns.Select(c => $"{c.RawType}:{c.FieldName}:{c.Type}:{c.IsList}:{c.Role}:{c.RefSheetName}:{c.EnumName}")) + ownedDataSource;
 			return HashUtility.Sha256Hex(hashSource);
 		}
 

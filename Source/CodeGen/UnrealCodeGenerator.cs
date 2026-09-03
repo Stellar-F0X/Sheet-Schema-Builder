@@ -12,6 +12,7 @@ namespace DataBuilder.CodeGen
 		private const string _STRUCT_FILE_TEMPLATE = "STRUCT_FILE";
 		private const string _PROPERTY_BLOCK_TEMPLATE = "PROPERTY_BLOCK";
 		private const string _STRUCT_REF_GETTER_BLOCK_TEMPLATE = "STRUCT_REF_GETTER_BLOCK";
+		private const string _STRUCT_LIST_REF_GETTER_BLOCK_TEMPLATE = "STRUCT_LIST_REF_GETTER_BLOCK";
 		private const string _STRUCT_DATA_GETTER_BLOCK_TEMPLATE = "STRUCT_DATA_GETTER_BLOCK";
 		private const string _DATABASE_FILE_TEMPLATE = "DATABASE_FILE";
 		private const string _SHEET_ARRAY_FIELD_TEMPLATE = "SHEET_ARRAY_FIELD";
@@ -21,6 +22,7 @@ namespace DataBuilder.CodeGen
 		private const string _DATA_INDEX_FIELD_BLOCK_TEMPLATE = "DATA_INDEX_FIELD_BLOCK";
 		private const string _DATA_DATABASE_GETTER_BLOCK_TEMPLATE = "DATA_DATABASE_GETTER_BLOCK";
 		private const string _DATA_INDEX_BUILD_BLOCK_TEMPLATE = "DATA_INDEX_BUILD_BLOCK";
+		private const string _DATA_LIST_INDEX_BUILD_BLOCK_TEMPLATE = "DATA_LIST_INDEX_BUILD_BLOCK";
 
 		/// <summary>Unreal 코드 생성에 필요한 설정과 시트 모델을 보관한다.</summary>
 		public UnrealCodeGenerator(BuilderConfig config, IReadOnlyList<SheetTable> tables, EnumRegistry enums, bool force) : base(
@@ -62,8 +64,8 @@ namespace DataBuilder.CodeGen
 			return Template.Render(_ENUM_BLOCK_TEMPLATE, ("ENUM_NAME", enumPair.Key), ("ENUM_MEMBERS", Indent(members, 4)));
 		}
 
-		/// <summary>컬럼이 Unreal C++ 코드에서 갖는 타입 이름.</summary>
-		private static string UnrealTypeOf(ColumnSpec column)
+		/// <summary>컬럼 원소가 Unreal C++ 코드에서 갖는 스칼라 타입 이름.</summary>
+		private static string UnrealScalarTypeOf(ColumnSpec column)
 		{
 			switch (column.Type)
 			{
@@ -85,9 +87,21 @@ namespace DataBuilder.CodeGen
 			}
 		}
 
+		/// <summary>컬럼이 Unreal C++ 코드에서 갖는 전체 타입 이름.</summary>
+		private static string UnrealTypeOf(ColumnSpec column)
+		{
+			string scalarType = UnrealScalarTypeOf(column);
+			return column.IsList ? $"TArray<{scalarType}>" : scalarType;
+		}
+
 		/// <summary>UPROPERTY 필드의 기본값을 만든다.</summary>
 		private static string UnrealDefaultValueOf(ColumnSpec column)
 		{
+			if (column.IsList)
+			{
+				return "{}";
+			}
+
 			switch (column.Type)
 			{
 				case EColumnType.Int:
@@ -111,8 +125,11 @@ namespace DataBuilder.CodeGen
 		private string GenerateStruct(SheetTable table)
 		{
 			string propertyBlocks = string.Join(Environment.NewLine + Environment.NewLine, table.Columns.Select(CreatePropertyBlock));
-			IReadOnlyList<ColumnSpec> foreignKeys = table.Columns.Where(c => c.Role == EColumnRole.ForeignKey).ToList();
-			string refGetterBlocks = string.Join(Environment.NewLine + Environment.NewLine, foreignKeys.Select(CreateStructRefGetterBlock));
+			IReadOnlyList<ColumnSpec> referenceKeys = table.Columns.Where(c => c.Role is EColumnRole.ForeignKey or EColumnRole.DataKey).ToList();
+			IReadOnlyList<ColumnSpec> foreignKeys = referenceKeys.Where(c => c.Role == EColumnRole.ForeignKey && c.IsList == false).ToList();
+			string refGetterBlocks = string.Join(Environment.NewLine + Environment.NewLine,
+			                                    foreignKeys.Select(CreateStructRefGetterBlock)
+			                                               .Concat(referenceKeys.Where(c => c.IsList).Select(CreateStructListRefGetterBlock)));
 			IReadOnlyList<(SheetTable ChildTable, ColumnSpec DataKey)> ownedData = OwnedDataOf(table);
 			string dataGetterBlocks = string.Join(Environment.NewLine + Environment.NewLine,
 			                                     ownedData.Select(relation => CreateStructDataGetterBlock(table, relation)));
@@ -122,7 +139,7 @@ namespace DataBuilder.CodeGen
 				? propertyBlocks
 				: propertyBlocks + Environment.NewLine + Environment.NewLine + accessorBlocks;
 			string refForwardDeclarations = string.Join(Environment.NewLine,
-			                                           foreignKeys.Select(c => TablesByName[c.RefSheetName])
+			                                           referenceKeys.Select(c => TablesByName[c.RefSheetName])
 			                                                      .Concat(ownedData.Select(relation => relation.ChildTable))
 			                                                      .Distinct()
 			                                                      .Select(target => $"struct {UnrealRowStructName(target)};"));
@@ -147,6 +164,19 @@ namespace DataBuilder.CodeGen
 			SheetTable target = TablesByName[column.RefSheetName];
 			return Template.Render(_STRUCT_REF_GETTER_BLOCK_TEMPLATE,
 			                       ("FIELD_NAME", column.FieldName),
+			                       ("TARGET_SHEET_NAME", target.Name),
+			                       ("TARGET_STRUCT_NAME", UnrealRowStructName(target)),
+			                       ("METHOD_NAME", "Get" + Identifier.ToPascal(column.FieldName)),
+			                       ("DATABASE_GETTER", "Get" + Identifier.Sanitize(target.Name)));
+		}
+
+		/// <summary>List&lt;타입&gt; FK/DK의 각 키가 가리키는 행 목록을 가져오는 helper를 만든다.</summary>
+		private string CreateStructListRefGetterBlock(ColumnSpec column)
+		{
+			SheetTable target = TablesByName[column.RefSheetName];
+			return Template.Render(_STRUCT_LIST_REF_GETTER_BLOCK_TEMPLATE,
+			                       ("FIELD_NAME", column.FieldName),
+			                       ("ROLE_NAME", column.Role == EColumnRole.ForeignKey ? "FK" : "DK"),
 			                       ("TARGET_SHEET_NAME", target.Name),
 			                       ("TARGET_STRUCT_NAME", UnrealRowStructName(target)),
 			                       ("METHOD_NAME", "Get" + Identifier.ToPascal(column.FieldName)),
@@ -203,7 +233,7 @@ namespace DataBuilder.CodeGen
 		private string CreateDataIndexFieldBlock((SheetTable ChildTable, ColumnSpec DataKey) relation)
 		{
 			return Template.Render(_DATA_INDEX_FIELD_BLOCK_TEMPLATE,
-			                       ("KEY_TYPE", UnrealTypeOf(relation.DataKey)),
+			                       ("KEY_TYPE", UnrealScalarTypeOf(relation.DataKey)),
 			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
 			                       ("INDEX_FIELD_NAME", DataIndexFieldName(relation.ChildTable, relation.DataKey)));
 		}
@@ -219,7 +249,7 @@ namespace DataBuilder.CodeGen
 
 		private string CreateDataIndexBuildBlock((SheetTable ChildTable, ColumnSpec DataKey) relation)
 		{
-			return Template.Render(_DATA_INDEX_BUILD_BLOCK_TEMPLATE,
+			return Template.Render(relation.DataKey.IsList ? _DATA_LIST_INDEX_BUILD_BLOCK_TEMPLATE : _DATA_INDEX_BUILD_BLOCK_TEMPLATE,
 			                       ("CHILD_STRUCT_NAME", UnrealRowStructName(relation.ChildTable)),
 			                       ("CHILD_SHEET_NAME", Identifier.Sanitize(relation.ChildTable.Name)),
 			                       ("DATA_KEY_FIELD_NAME", relation.DataKey.FieldName),
@@ -262,7 +292,7 @@ namespace DataBuilder.CodeGen
 		/// <summary>시트 배열의 Key 인덱스 필드 코드 블록을 만든다.</summary>
 		private string CreateIndexFieldBlock(SheetTable table)
 		{
-			return Template.Render(_INDEX_FIELD_BLOCK_TEMPLATE, ("KEY_TYPE", UnrealTypeOf(table.PrimaryKeyColumn!)), ("STRUCT_NAME", UnrealRowStructName(table)),
+			return Template.Render(_INDEX_FIELD_BLOCK_TEMPLATE, ("KEY_TYPE", UnrealScalarTypeOf(table.PrimaryKeyColumn!)), ("STRUCT_NAME", UnrealRowStructName(table)),
 			                       ("INDEX_FIELD_NAME", IndexFieldName(table)));
 		}
 
@@ -287,7 +317,7 @@ namespace DataBuilder.CodeGen
 		/// <summary>Unreal 함수 인자에 쓸 Key 타입 이름을 만든다.</summary>
 		private static string UnrealParameterTypeOf(ColumnSpec column)
 		{
-			string typeName = UnrealTypeOf(column);
+			string typeName = UnrealScalarTypeOf(column);
 			return typeName == "FString" ? "const FString&" : typeName;
 		}
 

@@ -32,6 +32,13 @@ namespace DataBuilder.Model
 			init;
 		}
 
+		/// <summary>셀 값이 쉼표로 구분된 원소 목록인지 여부.</summary>
+		public bool IsList
+		{
+			get;
+			init;
+		}
+
 		/// <summary>타입 뒤의 (pk)/(fk)/(dk) 표식으로 지정한 컬럼 역할.</summary>
 		public EColumnRole Role
 		{
@@ -60,12 +67,13 @@ namespace DataBuilder.Model
 			init;
 		}
 
-		/// <summary>타입 문자열을 파싱한다. 기본 타입과 enum:이름, 선택적인 (pk)/(fk)/(dk) 접미사를 지원한다.</summary>
+		/// <summary>타입 문자열을 파싱한다. 기본 타입, enum:이름, List&lt;타입&gt;, 선택적인 (pk)/(fk)/(dk) 접미사를 지원한다.</summary>
 		public static ColumnSpec Parse(string sheetName, int columnIndex, string typeText, string fieldName)
 		{
 			string raw = typeText.Trim();
 			string typePart = raw;
 			EColumnRole role = ParseRoleSuffix(ref typePart);
+			bool isList = TryUnwrapListType(ref typePart);
 			string lower = typePart.ToLowerInvariant();
 			string field = Identifier.Sanitize(fieldName);
 
@@ -78,16 +86,37 @@ namespace DataBuilder.Model
 
 			if (primitive.HasValue)
 			{
-				return new ColumnSpec { FieldName = field, Type = primitive.Value, Role = role, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = primitive.Value, IsList = isList, Role = role, RawType = raw };
 			}
 
 			if (TryParseNamedType(typePart, "enum", out string enumName))
 			{
 				string name = Identifier.EnsurePrefix(Identifier.Sanitize(enumName), "E");
-				return new ColumnSpec { FieldName = field, Type = EColumnType.Enum, Role = role, EnumName = name, RawType = raw };
+				return new ColumnSpec { FieldName = field, Type = EColumnType.Enum, IsList = isList, Role = role, EnumName = name, RawType = raw };
 			}
 
 			throw new SheetSchemaBuilderException($"시트 '{sheetName}' {columnIndex + 1}번째 열의 타입(1행)을 해석할 수 없습니다: '{raw}' ");
+		}
+
+
+		/// <summary>List&lt;타입&gt; 외곽을 제거하고 리스트 타입인지 반환한다.</summary>
+		private static bool TryUnwrapListType(ref string typeText)
+		{
+			string trimmed = typeText.Trim();
+			if (trimmed.StartsWith("List<", StringComparison.OrdinalIgnoreCase) == false || trimmed.EndsWith('>') == false)
+			{
+				typeText = trimmed;
+				return false;
+			}
+
+			string elementType = trimmed[5..^1].Trim();
+			if (elementType.Length == 0 || elementType.StartsWith("List<", StringComparison.OrdinalIgnoreCase))
+			{
+				return false;
+			}
+
+			typeText = elementType;
+			return true;
 		}
 
 
